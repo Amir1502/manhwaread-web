@@ -1,0 +1,34 @@
+name: Keep-Alive Auto-Pinger
+
+on:
+  schedule:
+    # Run every 10 minutes to prevent Render from spinning down
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    name: Ping ManhwaRead on Render
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Health Endpoint
+        run: |
+          URL="https://manhwaread-web.onrender.com/api/health"
+          echo "Pinging $URL at $(date -u)"
+          
+          # Retry up to 3 times in case Render is waking up
+          for i in 1 2 3; do
+            HTTP_CODE=$(curl -s -k -o /tmp/response.json -w "%{http_code}" --max-time 60 "$URL" || echo "000")
+            echo "Attempt $i: HTTP Status $HTTP_CODE"
+            if [ "$HTTP_CODE" = "200" ]; then
+              cat /tmp/response.json
+              echo ""
+              echo "✅ Service is alive and healthy!"
+              exit 0
+            fi
+            echo "Waiting 10s before retry..."
+            sleep 10
+          done
+          
+          echo "⚠️ Service responded with $HTTP_CODE, waking up or unavailable."
+          exit 0

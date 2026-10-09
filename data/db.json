@@ -1,18 +1,4 @@
 {
-  "users": {
-    "test-user-id-999": {
-      "id": "test-user-id-999",
-      "username": "TestReader99",
-      "email": "test99@example.com",
-      "passwordHash": "hash",
-      "salt": "salt",
-      "avatar": "https://example.com/avatar.png",
-      "bio": "Люблю манхву",
-      "exp": 150,
-      "createdAt": 1791571262931,
-      "bookmarks": [],
-      "history": {}
-    }
-  },
+  "users": {},
   "comments": []
 }
