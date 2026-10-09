@@ -5,6 +5,9 @@ on:
     # Run every 10 minutes to prevent Render from spinning down
     - cron: '*/10 * * * *'
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/keep-alive.yml'
 
 jobs:
   ping:
