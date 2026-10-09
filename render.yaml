@@ -4,6 +4,7 @@ services:
     runtime: node
     plan: free
     region: frankfurt
+    autoDeployTrigger: commit
     buildCommand: npm install && npm run build
     startCommand: npm run start
     envVars:
