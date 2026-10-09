@@ -16,8 +16,11 @@ import {
 import { Page, SChapter, SManga } from '@/lib/types';
 import { useApi } from '@/lib/useApi';
 import { useStored } from '@/lib/useStored';
+import { useAuth } from '@/lib/useAuth';
 import BubbleLayer from './BubbleLayer';
 import PageImage from './PageImage';
+import CommentsSection from '@/components/comments/CommentsSection';
+import PageCommentBadge from '@/components/comments/PageCommentBadge';
 
 interface ChapterResponse {
   pages: Page[];
@@ -48,12 +51,28 @@ export default function Reader({ mangaId, chapterId }: { mangaId: string; chapte
   const total = pages.length;
   const [pageState, setPageState] = useState<number | null>(null);
   const page = Math.min(Math.max(pageState ?? saved ?? 1, 1), Math.max(total, 1));
+  const { gainExp } = useAuth();
   const [hud, setHud] = useState(true);
   const [toc, setToc] = useState(false);
+  const [commentsDrawerOpen, setCommentsDrawerOpen] = useState(false);
+  const [activeCommentPage, setActiveCommentPage] = useState<number | null>(null);
+  const [pageCommentCounts, setPageCommentCounts] = useState<Record<number, number>>({});
   const [originals, setOriginals] = useState<Record<string, boolean>>({});
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
   const restored = useRef(false);
   const lastY = useRef(0);
+
+  // Fetch page comments counts
+  useEffect(() => {
+    fetch(`/api/comments?mangaId=${encodeURIComponent(mangaId)}&chapterId=${encodeURIComponent(chapterId)}`)
+      .then(res => res.json())
+      .then(d => {
+        if (d && d.pageCounts) {
+          setPageCommentCounts(d.pageCounts);
+        }
+      })
+      .catch(() => {});
+  }, [mangaId, chapterId]);
 
   const mode = settings.mode;
   const hasOverlay = pages.some(p => p.overlay && p.overlay.bubbles.length > 0);
@@ -87,8 +106,11 @@ export default function Reader({ mangaId, chapterId }: { mangaId: string; chapte
       totalPages: total,
       updatedAt: Date.now(),
     });
-    if (page >= total) markChapterRead(mangaId, chapterId);
-  }, [mangaId, chapterId, chapter, data?.manga, page, total]);
+    if (page >= total) {
+      markChapterRead(mangaId, chapterId);
+      gainExp(15);
+    }
+  }, [mangaId, chapterId, chapter, data?.manga, page, total, gainExp]);
 
   // Webtoon: track current page & auto-hide HUD.
   useEffect(() => {
@@ -273,6 +295,14 @@ export default function Reader({ mangaId, chapterId }: { mangaId: string; chapte
               id={`page-${p.index}`}
             >
               <PageImage page={p} eager={i < 3} />
+              <PageCommentBadge
+                pageNumber={p.index}
+                count={pageCommentCounts[p.index] || 0}
+                onClick={() => {
+                  setActiveCommentPage(p.index);
+                  setCommentsDrawerOpen(true);
+                }}
+              />
               {settings.aiOverlayEnabled && p.overlay && (
                 <BubbleLayer overlay={p.overlay} originals={originals} onToggle={toggleBubble} />
               )}
@@ -283,6 +313,14 @@ export default function Reader({ mangaId, chapterId }: { mangaId: string; chapte
             <div className="page-wrapper paged" key={current.index}>
               <div style={{ position: 'relative', lineHeight: 0, containerType: 'inline-size' }}>
                 <PageImage page={current} eager />
+                <PageCommentBadge
+                  pageNumber={current.index}
+                  count={pageCommentCounts[current.index] || 0}
+                  onClick={() => {
+                    setActiveCommentPage(current.index);
+                    setCommentsDrawerOpen(true);
+                  }}
+                />
                 {settings.aiOverlayEnabled && current.overlay && (
                   <BubbleLayer overlay={current.overlay} originals={originals} onToggle={toggleBubble} />
                 )}
@@ -292,26 +330,35 @@ export default function Reader({ mangaId, chapterId }: { mangaId: string; chapte
         )}
 
         {(mode === 'webtoon' || page >= total) && (
-          <section className="chapter-end" onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontSize: '1.25rem' }}>{chapter ? `Конец: ${chapter.title}` : 'Конец главы'}</h3>
-            <div className="hero-actions" style={{ justifyContent: 'center', marginTop: 0 }}>
-              {prev && (
-                <Link href={`${base}/${prev.id}`} className="btn btn-secondary">
-                  ← Предыдущая
+          <>
+            <section className="chapter-end" onClick={e => e.stopPropagation()}>
+              <h3 style={{ fontSize: '1.25rem' }}>{chapter ? `Конец: ${chapter.title}` : 'Конец главы'}</h3>
+              <div className="hero-actions" style={{ justifyContent: 'center', marginTop: 0 }}>
+                {prev && (
+                  <Link href={`${base}/${prev.id}`} className="btn btn-secondary">
+                    ← Предыдущая
+                  </Link>
+                )}
+                <Link href={`/manga/${mangaId}`} className="btn btn-secondary">
+                  К оглавлению
                 </Link>
-              )}
-              <Link href={`/manga/${mangaId}`} className="btn btn-secondary">
-                К оглавлению
-              </Link>
-              {next ? (
-                <Link href={`${base}/${next.id}`} className="btn btn-primary">
-                  Следующая глава →
-                </Link>
-              ) : (
-                <span className="chip">Это последняя доступная глава</span>
-              )}
+                {next ? (
+                  <Link href={`${base}/${next.id}`} className="btn btn-primary">
+                    Следующая глава →
+                  </Link>
+                ) : (
+                  <span className="chip">Это последняя доступная глава</span>
+                )}
+              </div>
+            </section>
+            <div onClick={e => e.stopPropagation()} style={{ width: '100%', marginTop: '2rem' }}>
+              <CommentsSection
+                mangaId={mangaId}
+                chapterId={chapterId}
+                totalPages={total}
+              />
             </div>
-          </section>
+          </>
         )}
       </main>
 
@@ -344,6 +391,16 @@ export default function Reader({ mangaId, chapterId }: { mangaId: string; chapte
           <span>{total}</span>
         </div>
         <button
+          className="btn btn-secondary btn-sm"
+          onClick={() => {
+            setActiveCommentPage(page);
+            setCommentsDrawerOpen(true);
+          }}
+          title="Комментарии"
+        >
+          💬 <span className="hide-mobile">({Object.values(pageCommentCounts).reduce((a, b) => a + b, 0)})</span>
+        </button>
+        <button
           className={`btn btn-sm ${next ? 'btn-primary' : 'btn-secondary'}`}
           disabled={!next}
           onClick={() => next && router.push(`${base}/${next.id}`)}
@@ -353,6 +410,25 @@ export default function Reader({ mangaId, chapterId }: { mangaId: string; chapte
           <IconChevronRight size={16} />
         </button>
       </footer>
+
+      {commentsDrawerOpen && (
+        <div className="backdrop" onClick={() => setCommentsDrawerOpen(false)} style={{ zIndex: 1100 }}>
+          <aside
+            className="comments-drawer-panel"
+            onClick={e => e.stopPropagation()}
+            style={{ zIndex: 1101 }}
+          >
+            <CommentsSection
+              mangaId={mangaId}
+              chapterId={chapterId}
+              pageNumber={activeCommentPage}
+              totalPages={total}
+              title={activeCommentPage ? `Комментарии к странице ${activeCommentPage}` : 'Комментарии к главе'}
+              onClose={() => setCommentsDrawerOpen(false)}
+            />
+          </aside>
+        </div>
+      )}
 
       {toc && <TocPanel mangaId={mangaId} currentId={chapterId} onClose={() => setToc(false)} />}
     </div>

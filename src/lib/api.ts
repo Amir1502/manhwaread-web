@@ -12,11 +12,11 @@ export function jsonOk(body: Record<string, unknown>, cacheSeconds = 0) {
   );
 }
 
-export function jsonError(err: unknown) {
+export function jsonError(err: unknown, statusOverride?: number) {
   const upstream = err instanceof SourceError ? err.status : undefined;
-  // 4xx from our own validation / upstream "not found / forbidden" pass through; everything else is a bad gateway.
-  const status = upstream && upstream >= 400 && upstream < 500 ? upstream : 502;
-  const message = err instanceof Error ? err.message : 'Unknown error';
+  const status = statusOverride ?? (upstream && upstream >= 400 && upstream < 500 ? upstream : 502);
+  const message = typeof err === 'string' ? err : err instanceof Error ? err.message : 'Unknown error';
   if (status >= 500) console.error('[api]', message);
   return NextResponse.json({ success: false, error: message }, { status });
 }
+

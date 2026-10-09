@@ -15,6 +15,7 @@ import {
 import { ReadingStatus, SChapter, SManga } from '@/lib/types';
 import { useApi } from '@/lib/useApi';
 import { useStored } from '@/lib/useStored';
+import CommentsSection from '@/components/comments/CommentsSection';
 
 interface DetailsResponse {
   manga: SManga;
@@ -266,6 +267,10 @@ export default function MangaDetailsPage({ params }: { params: Promise<{ id: str
             </button>
           </div>
         )}
+
+        <div style={{ marginTop: '3.5rem', borderTop: '1px solid var(--border-subtle)', paddingTop: '2rem' }}>
+          <CommentsSection mangaId={manga.id} chapterId="general" title="Обсуждение тайтла" />
+        </div>
       </div>
     </div>
   );

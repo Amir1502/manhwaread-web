@@ -19,15 +19,16 @@ export const SOURCE_LABELS: Record<string, string> = {
   mangalib: 'MangaLib',
   remanga: 'ReManga',
   mangamir: 'MangaMir',
+  mangabuff: 'MangaBuff',
   mangadex: 'MangaDex',
   manga18fx: 'Manga18fx',
   demo: 'Демо',
 };
 
-export function formatDate(iso?: string): string {
+export function formatDate(iso?: string | number): string {
   if (!iso) return '';
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
+  if (Number.isNaN(d.getTime())) return String(iso);
   const days = Math.floor((Date.now() - d.getTime()) / 86_400_000);
   if (days <= 0) return 'сегодня';
   if (days === 1) return 'вчера';

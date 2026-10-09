@@ -3,6 +3,7 @@ import { Manrope } from 'next/font/google';
 import './globals.css';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import { AuthProvider } from '@/lib/useAuth';
 
 const manrope = Manrope({ subsets: ['latin', 'cyrillic'], variable: '--font-sans', display: 'swap' });
 
@@ -29,9 +30,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="ru" className={manrope.variable}>
       <body>
-        <Navbar />
-        <main>{children}</main>
-        <Footer />
+        <AuthProvider>
+          <Navbar />
+          <main>{children}</main>
+          <Footer />
+        </AuthProvider>
       </body>
     </html>
   );

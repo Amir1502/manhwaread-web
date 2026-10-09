@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { IconBookmark, IconGithub, IconGrid } from './Icons';
+import UserMenu from './auth/UserMenu';
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -32,15 +33,18 @@ export default function Navbar() {
           ))}
         </nav>
 
-        <a
-          href="https://github.com/Amir1502/manhwaread-web"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn btn-secondary btn-sm nav-github"
-        >
-          <IconGithub />
-          GitHub
-        </a>
+        <div className="navbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <a
+            href="https://github.com/Amir1502/manhwaread-web"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-secondary btn-sm nav-github"
+          >
+            <IconGithub />
+            GitHub
+          </a>
+          <UserMenu />
+        </div>
       </div>
     </header>
   );
