@@ -1,140 +1,181 @@
-import { SManga, SChapter, Page, SourceMeta } from '../types';
-import { CURATED_MANGAS, CURATED_CHAPTERS, getCuratedPages } from './curated';
-import {
-  fetchMangaDexPopular,
-  searchMangaDex,
-  fetchMangaDexDetails,
-  fetchMangaDexChapters,
-  fetchMangaDexPages
-} from './mangadex';
+import { MangaListResult, Page, SChapter, SManga, SortMode, SourceMeta } from '../types';
+import { ID_SEPARATOR, MangaSource } from './base';
+import { DEMO_SLUG, LEGACY_DEMO_IDS, demoSource } from './demo';
+import { SourceError } from './http';
+import { manga18fxSource } from './manga18fx';
+import { mangadexSource } from './mangadex';
+import { mangalibSource } from './mangalib';
+import { mangamirSource } from './mangamir';
+import { remangaSource } from './remanga';
 
-export const AVAILABLE_SOURCES: SourceMeta[] = [
-  {
-    id: 'all',
-    name: 'Все источники',
-    lang: 'ru',
-    baseUrl: '',
-    isOnline: true,
-    supportsSearch: true,
-  },
-  {
-    id: 'curated',
-    name: 'ManhwaRead Топ (Каталог + AI Оверлей)',
-    lang: 'ru',
-    baseUrl: 'https://manhwaread.my.to',
-    isOnline: true,
-    supportsSearch: true,
-  },
-  {
-    id: 'mangadex',
-    name: 'MangaDex (API v5)',
-    lang: 'multi',
-    baseUrl: 'https://mangadex.org',
-    isOnline: true,
-    supportsSearch: true,
-  }
-];
+export const SOURCES: Record<string, MangaSource> = {
+  mangalib: mangalibSource,
+  remanga: remangaSource,
+  mangamir: mangamirSource,
+  mangadex: mangadexSource,
+  manga18fx: manga18fxSource,
+  demo: demoSource,
+};
 
-export async function getPopularManga(sourceId = 'all'): Promise<SManga[]> {
-  if (sourceId === 'curated') {
-    return CURATED_MANGAS;
-  }
-  
-  if (sourceId === 'mangadex') {
-    const md = await fetchMangaDexPopular(20);
-    return md.length > 0 ? md : CURATED_MANGAS;
-  }
+export const ALL_SOURCE_META: SourceMeta = {
+  id: 'all',
+  name: 'Все источники',
+  lang: 'ru',
+  baseUrl: '',
+  isOnline: true,
+  supportsSearch: true,
+};
 
-  // 'all': merge curated + MangaDex
-  const mdPopular = await fetchMangaDexPopular(14);
-  const combined = [...CURATED_MANGAS];
-  
-  for (const item of mdPopular) {
-    if (!combined.some(c => c.title.toLowerCase() === item.title.toLowerCase())) {
-      combined.push(item);
-    }
-  }
-  return combined;
-}
-
-export async function searchManga(query: string, sourceId = 'all'): Promise<SManga[]> {
-  const cleanQ = query.trim().toLowerCase();
-  if (!cleanQ) return getPopularManga(sourceId);
-
-  // Search curated first
-  const curatedMatches = CURATED_MANGAS.filter(m =>
-    m.title.toLowerCase().includes(cleanQ) ||
-    (m.altTitle && m.altTitle.toLowerCase().includes(cleanQ)) ||
-    m.genres.some(g => g.toLowerCase().includes(cleanQ))
-  );
-
-  if (sourceId === 'curated') {
-    return curatedMatches;
-  }
-
-  // Search MangaDex
-  const mdResults = await searchMangaDex(query, 16);
-  const combined = [...curatedMatches];
-
-  for (const item of mdResults) {
-    if (!combined.some(c => c.id === item.id)) {
-      combined.push(item);
-    }
-  }
-
-  return combined;
-}
-
-export async function getMangaById(id: string): Promise<SManga | null> {
-  // Check curated first
-  const foundCurated = CURATED_MANGAS.find(m => m.id === id);
-  if (foundCurated) return foundCurated;
-
-  // Check MangaDex
-  if (id.startsWith('md-')) {
-    const mdDetails = await fetchMangaDexDetails(id);
-    if (mdDetails) return mdDetails;
-  }
-
-  return null;
-}
-
-export async function getMangaChapters(mangaId: string): Promise<SChapter[]> {
-  if (CURATED_CHAPTERS[mangaId]) {
-    return CURATED_CHAPTERS[mangaId];
-  }
-
-  if (mangaId.startsWith('md-')) {
-    const chapters = await fetchMangaDexChapters(mangaId);
-    if (chapters.length > 0) return chapters;
-  }
-
-  // Fallback default chapters if none found
+export function listSources(includeAdult = false): SourceMeta[] {
   return [
-    {
-      id: `${mangaId}-ch-1`,
-      mangaId,
-      sourceId: 'curated',
-      number: 1,
-      title: 'Глава 1: Пролог',
-      releaseDate: '2026-10-09',
-      pagesCount: 5,
-    }
+    ALL_SOURCE_META,
+    ...Object.values(SOURCES)
+      .map(s => s.meta)
+      .filter(m => m.id !== 'demo' && (includeAdult || !m.isAdult)),
   ];
 }
 
-export async function getChapterPages(mangaId: string, chapterId: string): Promise<Page[]> {
-  // Check if it's a curated chapter
-  if (!chapterId.startsWith('md-ch-')) {
-    return getCuratedPages(chapterId);
-  }
-
-  // Fetch from MangaDex
-  const mdPages = await fetchMangaDexPages(chapterId);
-  if (mdPages.length > 0) {
-    return mdPages;
-  }
-
-  // Fallback to sample high-res pages if MangaDex at-home node fails
-  return getCuratedPages(chapterId);
+export function getSource(id: string): MangaSource {
+  const src = SOURCES[id];
+  if (!src) throw new SourceError(`Неизвестный источник: ${id}`, 404);
+  return src;
 }
+
+/** Resolves a global manga id (incl. legacy `md-<uuid>` and old curated ids) into source + slug. */
+export function parseMangaId(rawId: string): { source: MangaSource; slug: string } {
+  const id = decodeURIComponent(rawId);
+  const sep = id.indexOf(ID_SEPARATOR);
+  if (sep > 0) return { source: getSource(id.slice(0, sep)), slug: id.slice(sep + 1) };
+  if (id.startsWith('md-')) return { source: mangadexSource, slug: id.slice(3) };
+  if (LEGACY_DEMO_IDS.includes(id) || id === DEMO_SLUG) return { source: demoSource, slug: DEMO_SLUG };
+  throw new SourceError('Тайтл не найден', 404);
+}
+
+function normalizeChapterId(rawId: string): string {
+  const id = decodeURIComponent(rawId);
+  return id.startsWith('md-ch-') ? id.slice(6) : id;
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new SourceError(`${label}: таймаут`)), ms);
+    p.then(
+      v => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      e => {
+        clearTimeout(t);
+        reject(e);
+      },
+    );
+  });
+}
+
+export interface BrowseParams {
+  source?: string;
+  query?: string;
+  page?: number;
+  sort?: SortMode;
+  adult?: boolean;
+}
+
+export interface BrowseResult extends MangaListResult {
+  errors: Array<{ source: string; message: string }>;
+}
+
+export async function browse({
+  source = 'all',
+  query = '',
+  page = 1,
+  sort = 'popular',
+  adult = false,
+}: BrowseParams): Promise<BrowseResult> {
+  const q = query.trim();
+  const targets =
+    source === 'all'
+      ? Object.values(SOURCES).filter(s => s.meta.id !== 'demo' && (adult || !s.meta.isAdult))
+      : [getSource(source)];
+
+  if (!adult && targets.some(t => t.meta.isAdult)) {
+    throw new SourceError('Источник 18+ доступен только после включения взрослого контента', 403);
+  }
+
+  const settled = await Promise.allSettled(
+    targets.map(s =>
+      withTimeout(q ? s.search(q, page) : s.list(sort, page), source === 'all' ? 9000 : 15000, s.meta.name),
+    ),
+  );
+
+  const lists: SManga[][] = [];
+  const errors: BrowseResult['errors'] = [];
+  let hasNextPage = false;
+  settled.forEach((r, i) => {
+    if (r.status === 'fulfilled') {
+      lists.push(r.value.items.filter(m => adult || !m.isAdult));
+      hasNextPage ||= r.value.hasNextPage;
+    } else {
+      errors.push({
+        source: targets[i].meta.id,
+        message: r.reason instanceof Error ? r.reason.message : String(r.reason),
+      });
+    }
+  });
+
+  // Round-robin merge so one source doesn't dominate the first screen.
+  const items: SManga[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; lists.some(l => i < l.length); i++) {
+    for (const l of lists) {
+      const m = l[i];
+      if (m && !seen.has(m.id)) {
+        seen.add(m.id);
+        items.push(m);
+      }
+    }
+  }
+
+  if (errors.length === targets.length && targets.length > 0) {
+    throw new SourceError(errors.map(e => `${e.source}: ${e.message}`).join('; '), 502);
+  }
+  return { items, hasNextPage, errors };
+}
+
+export async function getMangaById(id: string): Promise<SManga | null> {
+  try {
+    const { source, slug } = parseMangaId(id);
+    return await source.details(slug);
+  } catch (err) {
+    if (err instanceof SourceError && err.status === 404) return null;
+    throw err;
+  }
+}
+
+export async function getMangaChapters(id: string): Promise<SChapter[]> {
+  const { source, slug } = parseMangaId(id);
+  return source.chapters(slug);
+}
+
+export async function getChapterPages(mangaId: string, chapterId: string): Promise<Page[]> {
+  const { source, slug } = parseMangaId(mangaId);
+  return source.pages(slug, normalizeChapterId(chapterId));
+}
+
+/** Chapters are newest-first: "next" is the newer one (lower index). */
+export function findNeighbours(chapters: SChapter[], chapterId: string) {
+  const id = normalizeChapterId(chapterId);
+  const idx = chapters.findIndex(c => c.id === id);
+  return {
+    current: idx >= 0 ? chapters[idx] : null,
+    next: idx > 0 ? chapters[idx - 1] : null,
+    prev: idx >= 0 && idx < chapters.length - 1 ? chapters[idx + 1] : null,
+  };
+}
+
+export function isAllowedImageHost(sourceId: string, host: string): MangaSource | null {
+  const src = SOURCES[sourceId];
+  if (!src) return null;
+  return src.imageHosts.some(re => re.test(host)) ? src : null;
+}
+
+export { SourceError };

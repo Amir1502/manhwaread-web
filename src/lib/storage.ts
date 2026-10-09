@@ -1,16 +1,20 @@
 import { LibraryItem, ReadingProgress, ReadingStatus, SManga } from './types';
 
-const STORAGE_KEYS = {
+export const STORAGE_KEYS = {
   LIBRARY: 'manhwaread_library_v1',
   PROGRESS: 'manhwaread_progress_v1',
   SETTINGS: 'manhwaread_settings_v1',
-};
+  READ: 'manhwaread_read_chapters_v1',
+} as const;
+
+export const STORAGE_EVENT = 'manhwaread:storage';
 
 export interface ReaderSettings {
   mode: 'webtoon' | 'paginated';
   aiOverlayEnabled: boolean;
-  maxWidth: number; // e.g. 800, 1000, 1400 (or 0 for 100%)
+  maxWidth: number; // 0 = 100%
   pageGap: number;
+  showAdult: boolean;
 }
 
 export const DEFAULT_SETTINGS: ReaderSettings = {
@@ -18,111 +22,115 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   aiOverlayEnabled: true,
   maxWidth: 900,
   pageGap: 0,
+  showAdult: false,
 };
 
-// --- Library Management ---
+const isBrowser = () => typeof window !== 'undefined';
 
-export function getLibraryItems(): LibraryItem[] {
-  if (typeof window === 'undefined') return [];
+function read<T>(key: string, fallback: T): T {
+  if (!isBrowser()) return fallback;
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.LIBRARY);
-    return raw ? JSON.parse(raw) : [];
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
   } catch {
-    return [];
+    return fallback;
   }
 }
 
-export function saveLibraryItem(manga: SManga, status: ReadingStatus): LibraryItem[] {
-  if (typeof window === 'undefined') return [];
-  const items = getLibraryItems();
-  const existingIdx = items.findIndex(i => i.manga.id === manga.id);
-  const now = Date.now();
-
-  if (existingIdx >= 0) {
-    items[existingIdx].status = status;
-    items[existingIdx].updatedAt = now;
-  } else {
-    items.unshift({
-      manga,
-      status,
-      addedAt: now,
-      updatedAt: now,
-    });
-  }
-
+function write(key: string, value: unknown) {
+  if (!isBrowser()) return;
   try {
-    localStorage.setItem(STORAGE_KEYS.LIBRARY, JSON.stringify(items));
+    localStorage.setItem(key, JSON.stringify(value));
+    window.dispatchEvent(new CustomEvent(STORAGE_EVENT, { detail: key }));
   } catch (err) {
-    console.error('Failed to save library item', err);
+    console.error('Failed to write localStorage', key, err);
   }
+}
+
+/** Strip heavy fields before persisting a manga snapshot. */
+function snapshot(m: SManga): SManga {
+  return { ...m, description: m.description.slice(0, 400), genres: m.genres.slice(0, 8) };
+}
+
+// --- Library ---
+
+export function getLibraryItems(): LibraryItem[] {
+  const items = read<LibraryItem[]>(STORAGE_KEYS.LIBRARY, []);
+  return Array.isArray(items) ? items.filter(i => i && i.manga && i.manga.id) : [];
+}
+
+export function saveLibraryItem(manga: SManga, status: ReadingStatus): LibraryItem[] {
+  const items = getLibraryItems();
+  const now = Date.now();
+  const idx = items.findIndex(i => i.manga.id === manga.id);
+  if (idx >= 0) {
+    items[idx] = { ...items[idx], manga: snapshot(manga), status, updatedAt: now };
+  } else {
+    items.unshift({ manga: snapshot(manga), status, addedAt: now, updatedAt: now });
+  }
+  write(STORAGE_KEYS.LIBRARY, items);
   return items;
 }
 
 export function removeLibraryItem(mangaId: string): LibraryItem[] {
-  if (typeof window === 'undefined') return [];
   const items = getLibraryItems().filter(i => i.manga.id !== mangaId);
-  try {
-    localStorage.setItem(STORAGE_KEYS.LIBRARY, JSON.stringify(items));
-  } catch (err) {
-    console.error('Failed to remove library item', err);
-  }
+  write(STORAGE_KEYS.LIBRARY, items);
   return items;
 }
 
 export function getMangaLibraryStatus(mangaId: string): ReadingStatus | null {
-  const items = getLibraryItems();
-  const found = items.find(i => i.manga.id === mangaId);
-  return found ? found.status : null;
+  return getLibraryItems().find(i => i.manga.id === mangaId)?.status ?? null;
 }
 
-// --- Reading Progress & History ---
+// --- Progress & history ---
 
 export function getAllProgress(): Record<string, ReadingProgress> {
-  if (typeof window === 'undefined') return {};
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.PROGRESS);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
+  const all = read<Record<string, ReadingProgress>>(STORAGE_KEYS.PROGRESS, {});
+  return all && typeof all === 'object' ? all : {};
 }
 
 export function getMangaProgress(mangaId: string): ReadingProgress | null {
-  const all = getAllProgress();
-  return all[mangaId] || null;
+  return getAllProgress()[mangaId] || null;
 }
 
 export function saveProgress(progress: ReadingProgress): void {
-  if (typeof window === 'undefined') return;
   const all = getAllProgress();
   all[progress.mangaId] = progress;
-  try {
-    localStorage.setItem(STORAGE_KEYS.PROGRESS, JSON.stringify(all));
-  } catch (err) {
-    console.error('Failed to save progress', err);
-  }
+  // keep history bounded
+  const entries = Object.values(all)
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, 300);
+  write(STORAGE_KEYS.PROGRESS, Object.fromEntries(entries.map(e => [e.mangaId, e])));
 }
 
-// --- Reader Settings ---
+export function removeProgress(mangaId: string): void {
+  const all = getAllProgress();
+  delete all[mangaId];
+  write(STORAGE_KEYS.PROGRESS, all);
+}
+
+// --- Read chapters ---
+
+export function getReadChapters(mangaId: string): string[] {
+  return read<Record<string, string[]>>(STORAGE_KEYS.READ, {})[mangaId] || [];
+}
+
+export function markChapterRead(mangaId: string, chapterId: string): void {
+  const all = read<Record<string, string[]>>(STORAGE_KEYS.READ, {});
+  const list = all[mangaId] || [];
+  if (list.includes(chapterId)) return;
+  all[mangaId] = [...list, chapterId].slice(-3000);
+  write(STORAGE_KEYS.READ, all);
+}
+
+// --- Settings ---
 
 export function getReaderSettings(): ReaderSettings {
-  if (typeof window === 'undefined') return DEFAULT_SETTINGS;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-    return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : DEFAULT_SETTINGS;
-  } catch {
-    return DEFAULT_SETTINGS;
-  }
+  return { ...DEFAULT_SETTINGS, ...read<Partial<ReaderSettings>>(STORAGE_KEYS.SETTINGS, {}) };
 }
 
 export function saveReaderSettings(settings: Partial<ReaderSettings>): ReaderSettings {
-  if (typeof window === 'undefined') return DEFAULT_SETTINGS;
-  const current = getReaderSettings();
-  const updated = { ...current, ...settings };
-  try {
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(updated));
-  } catch (err) {
-    console.error('Failed to save reader settings', err);
-  }
+  const updated = { ...getReaderSettings(), ...settings };
+  write(STORAGE_KEYS.SETTINGS, updated);
   return updated;
 }

@@ -1,193 +1,196 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useMemo, useState } from 'react';
+import { IconPlay } from '@/components/Icons';
+import { READING_STATUS_LABELS, SOURCE_LABELS, formatDate } from '@/lib/labels';
+import { getAllProgress, getLibraryItems, removeLibraryItem, removeProgress, saveLibraryItem } from '@/lib/storage';
 import { LibraryItem, ReadingProgress, ReadingStatus } from '@/lib/types';
-import { getLibraryItems, getAllProgress, removeLibraryItem, saveLibraryItem } from '@/lib/storage';
+import { useStored } from '@/lib/useStored';
+
+type Tab = 'all' | ReadingStatus | 'history';
+const NO_ITEMS: LibraryItem[] = [];
+const NO_PROGRESS: Record<string, ReadingProgress> = {};
 
 export default function LibraryPage() {
-  const [items, setItems] = useState<LibraryItem[]>([]);
-  const [progressMap, setProgressMap] = useState<Record<string, ReadingProgress>>({});
-  const [activeTab, setActiveTab] = useState<'all' | ReadingStatus | 'history'>('all');
+  return (
+    <Suspense
+      fallback={
+        <div className="center-state">
+          <div className="spinner" />
+        </div>
+      }
+    >
+      <Library />
+    </Suspense>
+  );
+}
 
-  useEffect(() => {
-    setItems(getLibraryItems());
-    setProgressMap(getAllProgress());
-  }, []);
+function Library() {
+  const params = useSearchParams();
+  const items = useStored(getLibraryItems, NO_ITEMS);
+  const progressMap = useStored(getAllProgress, NO_PROGRESS);
+  const [tab, setTab] = useState<Tab>(params.get('tab') === 'history' ? 'history' : 'all');
 
-  const handleRemove = (mangaId: string) => {
-    const updated = removeLibraryItem(mangaId);
-    setItems(updated);
-  };
+  const history = useMemo(() => Object.values(progressMap).sort((a, b) => b.updatedAt - a.updatedAt), [progressMap]);
+  const counts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const i of items) c[i.status] = (c[i.status] || 0) + 1;
+    return c;
+  }, [items]);
+  const filtered = tab === 'all' || tab === 'history' ? items : items.filter(i => i.status === tab);
 
-  const handleStatusChange = (item: LibraryItem, newStatus: ReadingStatus) => {
-    const updated = saveLibraryItem(item.manga, newStatus);
-    setItems(updated);
-  };
-
-  const filteredItems = items.filter(item => {
-    if (activeTab === 'all' || activeTab === 'history') return true;
-    return item.status === activeTab;
-  });
-
-  const historyEntries = Object.values(progressMap).sort((a, b) => b.updatedAt - a.updatedAt);
+  const tabs: Array<{ id: Tab; label: string; count: number }> = [
+    { id: 'all', label: 'Все', count: items.length },
+    ...(Object.keys(READING_STATUS_LABELS) as ReadingStatus[]).map(s => ({
+      id: s as Tab,
+      label: READING_STATUS_LABELS[s],
+      count: counts[s] || 0,
+    })),
+    { id: 'history', label: 'История', count: history.length },
+  ];
 
   return (
-    <div className="container" style={{ padding: '2.5rem 1.25rem 5rem' }}>
-      <div style={{ marginBottom: '2rem' }}>
-        <h1 style={{ fontSize: '2.2rem', fontWeight: 800, marginBottom: '0.5rem' }}>
-          Моя библиотека
-        </h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
-          Ваши сохраненные манхвы, история и закладки глав
-        </p>
+    <div className="container">
+      <div className="page-head">
+        <h1>Моя библиотека</h1>
+        <p className="secondary">Закладки, статусы и история чтения хранятся в этом браузере.</p>
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '1rem', marginBottom: '2rem' }}>
-        {[
-          { id: 'all', label: `Все (${items.length})` },
-          { id: 'reading', label: '📖 Читаю' },
-          { id: 'planned', label: '⭐ В планах' },
-          { id: 'completed', label: '✅ Прочитано' },
-          { id: 'dropped', label: '🛑 Брошено' },
-          { id: 'history', label: `🕒 История (${historyEntries.length})` },
-        ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as typeof activeTab)}
-            className={`btn btn-sm ${activeTab === tab.id ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ borderRadius: 'var(--radius-full)' }}
-          >
-            {tab.label}
+      <div className="tabs" role="tablist">
+        {tabs.map(t => (
+          <button key={t.id} role="tab" className={`tab ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>
+            {t.label}
+            <span className="count">{t.count}</span>
           </button>
         ))}
       </div>
 
-      {/* History view */}
-      {activeTab === 'history' ? (
-        historyEntries.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '5rem 0', color: 'var(--text-muted)' }}>
-            <h3>История чтения пуста</h3>
-            <p style={{ marginTop: '0.5rem', marginBottom: '1.5rem' }}>Откройте любую главу в каталоге, чтобы начать чтение</p>
-            <Link href="/" className="btn btn-primary">Перейти в каталог</Link>
-          </div>
+      {tab === 'history' ? (
+        history.length === 0 ? (
+          <Empty title="История чтения пуста" text="Откройте любую главу — прогресс сохранится автоматически." />
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {historyEntries.map(h => (
-              <div
-                key={`${h.mangaId}-${h.chapterId}`}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '1rem 1.25rem',
-                  background: 'var(--bg-card)',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--border-subtle)',
-                  flexWrap: 'wrap',
-                  gap: '1rem'
-                }}
-              >
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)' }}>
-                    Тайтл ID: {h.mangaId}
+          <div className="list-grid">
+            {history.map(h => (
+              <div key={h.mangaId} className="list-card">
+                <Link href={`/manga/${h.mangaId}`}>
+                  {h.coverUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={h.coverUrl} alt="" loading="lazy" />
+                  ) : (
+                    <div className="thumb" />
+                  )}
+                </Link>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', flex: 1, minWidth: 0 }}>
+                  <Link href={`/manga/${h.mangaId}`} style={{ fontWeight: 700, lineHeight: 1.3 }}>
+                    {h.mangaTitle || h.mangaId}
+                  </Link>
+                  <span className="secondary" style={{ fontSize: '0.84rem' }}>
+                    {h.chapterTitle || `Глава ${h.chapterNumber}`}
+                  </span>
+                  <div className="progress-bar">
+                    <div style={{ width: `${h.totalPages ? Math.round((h.pageIndex / h.totalPages) * 100) : 0}%` }} />
                   </div>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-                    {h.chapterTitle || `Глава ${h.chapterNumber}`} • Страница {h.pageIndex} из {h.totalPages}
-                  </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                    {new Date(h.updatedAt).toLocaleString('ru-RU')}
+                  <span className="muted" style={{ fontSize: '0.75rem' }}>
+                    Стр. {h.pageIndex} из {h.totalPages} · {formatDate(new Date(h.updatedAt).toISOString())}
+                  </span>
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto' }}>
+                    <Link href={`/read/${h.mangaId}/${h.chapterId}`} className="btn btn-primary btn-sm">
+                      <IconPlay size={12} /> Продолжить
+                    </Link>
+                    <button className="btn btn-ghost btn-sm" onClick={() => removeProgress(h.mangaId)}>
+                      Убрать
+                    </button>
                   </div>
                 </div>
-
-                <Link href={`/read/${h.mangaId}/${h.chapterId}`} className="btn btn-primary btn-sm">
-                  Продолжить чтение →
-                </Link>
               </div>
             ))}
           </div>
         )
+      ) : filtered.length === 0 ? (
+        <Empty title="Здесь пока пусто" text="Добавляйте тайтлы в библиотеку со страницы описания." />
       ) : (
-        /* Library Bookmarks View */
-        filteredItems.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '5rem 0', color: 'var(--text-muted)' }}>
-            <h3>В этой категории пока ничего нет</h3>
-            <p style={{ marginTop: '0.5rem', marginBottom: '1.5rem' }}>Добавляйте понравившиеся тайтлы со страницы описания</p>
-            <Link href="/" className="btn btn-primary">Исследовать каталог</Link>
-          </div>
-        ) : (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-            gap: '1.5rem'
-          }}>
-            {filteredItems.map(item => {
-              const mangaProgress = progressMap[item.manga.id];
-              return (
-                <div
-                  key={item.manga.id}
-                  style={{
-                    display: 'flex',
-                    background: 'var(--bg-card)',
-                    borderRadius: 'var(--radius-md)',
-                    overflow: 'hidden',
-                    border: '1px solid var(--border-subtle)',
-                    transition: 'all var(--transition-fast)'
-                  }}
-                >
-                  <img
-                    src={item.manga.coverUrl}
-                    alt={item.manga.title}
-                    style={{ width: '100px', height: '140px', objectFit: 'cover' }}
-                  />
-
-                  <div style={{ padding: '0.85rem', display: 'flex', flexDirection: 'column', flex: 1, gap: '0.4rem' }}>
-                    <Link
-                      href={`/manga/${item.manga.id}`}
-                      style={{ fontWeight: 700, fontSize: '0.95rem', lineHeight: 1.3 }}
-                      className="chapter-title"
+        <div className="list-grid">
+          {filtered.map(item => {
+            const p = progressMap[item.manga.id];
+            return (
+              <div key={item.manga.id} className="list-card">
+                <Link href={`/manga/${item.manga.id}`}>
+                  {item.manga.coverUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={item.manga.coverUrl} alt={item.manga.title} loading="lazy" />
+                  ) : (
+                    <div className="thumb" />
+                  )}
+                </Link>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', flex: 1, minWidth: 0 }}>
+                  <Link href={`/manga/${item.manga.id}`} style={{ fontWeight: 700, lineHeight: 1.3 }}>
+                    {item.manga.title}
+                  </Link>
+                  <span className="muted" style={{ fontSize: '0.78rem' }}>
+                    {[SOURCE_LABELS[item.manga.sourceId] || item.manga.sourceId, item.manga.type]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                  <span className="secondary" style={{ fontSize: '0.82rem' }}>
+                    {p
+                      ? `${p.chapterTitle || `Глава ${p.chapterNumber}`} · стр. ${p.pageIndex}/${p.totalPages}`
+                      : 'Ещё не начато'}
+                  </span>
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: '0.5rem',
+                      marginTop: 'auto',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    {p && (
+                      <Link href={`/read/${item.manga.id}/${p.chapterId}`} className="btn btn-primary btn-sm">
+                        <IconPlay size={12} /> Читать
+                      </Link>
+                    )}
+                    <select
+                      className="select"
+                      style={{ padding: '0.35rem 0.6rem', fontSize: '0.78rem' }}
+                      value={item.status}
+                      onChange={e => saveLibraryItem(item.manga, e.target.value as ReadingStatus)}
+                      aria-label="Статус"
                     >
-                      {item.manga.title}
-                    </Link>
-
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                      {mangaProgress ? `Гл. ${mangaProgress.chapterNumber} (Стр. ${mangaProgress.pageIndex})` : 'Ещё не начато'}
-                    </div>
-
-                    <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <select
-                        value={item.status}
-                        onChange={e => handleStatusChange(item, e.target.value as ReadingStatus)}
-                        style={{
-                          fontSize: '0.75rem',
-                          background: 'rgba(255, 255, 255, 0.08)',
-                          padding: '0.2rem 0.5rem',
-                          borderRadius: 'var(--radius-sm)',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        <option value="reading">Читаю</option>
-                        <option value="planned">В планах</option>
-                        <option value="completed">Прочитано</option>
-                        <option value="dropped">Брошено</option>
-                      </select>
-
-                      <button
-                        onClick={() => handleRemove(item.manga.id)}
-                        style={{ fontSize: '0.75rem', color: '#EF4444', padding: '0.2rem 0.5rem' }}
-                        title="Удалить из библиотеки"
-                      >
-                        Удалить
-                      </button>
-                    </div>
+                      {(Object.keys(READING_STATUS_LABELS) as ReadingStatus[]).map(s => (
+                        <option key={s} value={s}>
+                          {READING_STATUS_LABELS[s]}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      style={{ color: 'var(--red)' }}
+                      onClick={() => removeLibraryItem(item.manga.id)}
+                    >
+                      Удалить
+                    </button>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )
+              </div>
+            );
+          })}
+        </div>
       )}
+    </div>
+  );
+}
+
+function Empty({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="empty-state">
+      <h3>{title}</h3>
+      <p style={{ marginBottom: '1.25rem' }}>{text}</p>
+      <Link href="/" className="btn btn-primary">
+        Перейти в каталог
+      </Link>
     </div>
   );
 }

@@ -1,235 +1,271 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
-import { SManga, SChapter, ReadingStatus, ReadingProgress } from '@/lib/types';
-import { getMangaLibraryStatus, saveLibraryItem, getMangaProgress } from '@/lib/storage';
+import { use, useCallback, useMemo, useState } from 'react';
+import CoverImage from '@/components/CoverImage';
+import { IconCheck, IconExternal, IconPlay, IconSearch, IconSort, IconStar } from '@/components/Icons';
+import { READING_STATUS_LABELS, SOURCE_LABELS, STATUS_LABELS, formatDate, plural } from '@/lib/labels';
+import {
+  getMangaLibraryStatus,
+  getMangaProgress,
+  getReadChapters,
+  removeLibraryItem,
+  saveLibraryItem,
+} from '@/lib/storage';
+import { ReadingStatus, SChapter, SManga } from '@/lib/types';
+import { useApi } from '@/lib/useApi';
+import { useStored } from '@/lib/useStored';
+
+interface DetailsResponse {
+  manga: SManga;
+  chapters: SChapter[];
+  chaptersError?: string;
+}
+
+const PAGE = 100;
+const NO_READ: string[] = [];
 
 export default function MangaDetailsPage({ params }: { params: Promise<{ id: string }> }) {
-  const resolvedParams = use(params);
-  const mangaId = resolvedParams.id;
+  const { id: rawId } = use(params);
+  const mangaId = decodeURIComponent(rawId);
+  const { data, error, loading } = useApi<DetailsResponse>(`/api/manga/${encodeURIComponent(mangaId)}`);
 
-  const [manga, setManga] = useState<SManga | null>(null);
-  const [chapters, setChapters] = useState<SChapter[]>([]);
-  const [loading, setLoading] = useState(true);
+  const libraryStatus = useStored(
+    useCallback(() => getMangaLibraryStatus(mangaId), [mangaId]),
+    null,
+  );
+  const progress = useStored(
+    useCallback(() => getMangaProgress(mangaId), [mangaId]),
+    null,
+  );
+  const readIds = useStored(
+    useCallback(() => getReadChapters(mangaId), [mangaId]),
+    NO_READ,
+  );
+  const readSet = useMemo(() => new Set(readIds), [readIds]);
+
   const [sortAsc, setSortAsc] = useState(false);
-  const [chapterFilter, setChapterFilter] = useState('');
-  const [libraryStatus, setLibraryStatus] = useState<ReadingStatus | null>(null);
-  const [progress, setProgress] = useState<ReadingProgress | null>(null);
+  const [filter, setFilter] = useState('');
+  const [limit, setLimit] = useState(PAGE);
+  const [expanded, setExpanded] = useState(false);
 
-  useEffect(() => {
-    fetch(`/api/manga/${mangaId}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          setManga(data.manga);
-          setChapters(data.chapters || []);
-        }
-      })
-      .catch(err => console.error('Failed to load manga:', err))
-      .finally(() => setLoading(false));
-
-    // Client-side storage read
-    setLibraryStatus(getMangaLibraryStatus(mangaId));
-    setProgress(getMangaProgress(mangaId));
-  }, [mangaId]);
-
-  const handleStatusChange = (status: ReadingStatus) => {
-    if (!manga) return;
-    saveLibraryItem(manga, status);
-    setLibraryStatus(status);
-  };
+  const chapters = useMemo(() => data?.chapters ?? [], [data]);
+  const visible = useMemo(() => {
+    const ordered = sortAsc ? [...chapters].reverse() : chapters;
+    const q = filter.trim().toLowerCase();
+    if (!q) return ordered;
+    return ordered.filter(c => c.title.toLowerCase().includes(q) || String(c.number) === q);
+  }, [chapters, sortAsc, filter]);
 
   if (loading) {
     return (
-      <div className="container" style={{ padding: '6rem 0', textAlign: 'center', color: 'var(--text-secondary)' }}>
-        <p style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>Загрузка тайтла...</p>
+      <div className="center-state">
+        <div className="spinner" />
+        Загрузка тайтла…
       </div>
     );
   }
 
-  if (!manga) {
+  if (error || !data?.manga) {
     return (
-      <div className="container" style={{ padding: '6rem 0', textAlign: 'center' }}>
-        <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>Тайтл не найден</h2>
-        <Link href="/" className="btn btn-primary">Вернуться в каталог</Link>
+      <div className="center-state">
+        <h2 style={{ color: 'var(--text-primary)' }}>Тайтл не найден</h2>
+        {error && <p>{error}</p>}
+        <Link href="/" className="btn btn-primary">
+          Вернуться в каталог
+        </Link>
       </div>
     );
   }
 
-  const sortedChapters = [...chapters].sort((a, b) => {
-    return sortAsc ? a.number - b.number : b.number - a.number;
-  });
+  const manga = data.manga;
+  const first = chapters[chapters.length - 1];
+  const progressChapter = progress ? chapters.find(c => c.id === progress.chapterId) : undefined;
+  const continueTarget = progressChapter || first;
+  const continueLabel = progressChapter ? `Продолжить: ${progressChapter.title.split(':')[0]}` : 'Начать читать';
 
-  const filteredChapters = sortedChapters.filter(ch => {
-    if (!chapterFilter.trim()) return true;
-    return ch.title.toLowerCase().includes(chapterFilter.toLowerCase()) || 
-           ch.number.toString().includes(chapterFilter);
-  });
-
-  // Target chapter for continue reading
-  const firstChapter = chapters.length > 0 ? chapters[chapters.length - 1] : null;
-  const continueChapterId = progress?.chapterId || (firstChapter ? firstChapter.id : null);
-  const continueText = progress ? `Продолжить: Гл. ${progress.chapterNumber}` : 'Начать читать';
+  const onStatus = (value: string) => {
+    if (value === 'remove') removeLibraryItem(manga.id);
+    else saveLibraryItem(manga, value as ReadingStatus);
+  };
 
   return (
     <div>
-      {/* Blur Header Backdrop */}
-      <div className="detail-backdrop">
-        <img src={manga.coverUrl} alt="" className="detail-backdrop-image" />
+      <div className="detail-hero">
+        {manga.coverUrl && <div className="detail-hero-bg" style={{ backgroundImage: `url("${manga.coverUrl}")` }} />}
         <div className="container">
           <div className="detail-content">
-            {/* Cover Card */}
-            <div className="detail-cover-box">
-              <img src={manga.coverUrl} alt={manga.title} className="detail-cover-img" />
+            <div className="detail-cover">
+              <CoverImage src={manga.coverUrl} alt={manga.title} eager />
             </div>
 
-            {/* Info Column */}
             <div className="detail-info">
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <span className="chip chip-ai">
-                  {manga.sourceId === 'curated' ? 'Векторный AI-оверлей' : 'MangaDex'}
-                </span>
-                <span className="chip" style={{ color: '#FACC15', fontWeight: 700 }}>
-                  ★ {manga.rating.toFixed(1)}
-                </span>
-                <span className="chip">
-                  {manga.status === 'COMPLETED' ? 'Завершён' : 'Онгоинг'}
-                </span>
+              <div className="chip-wrap">
+                <span className="chip chip-accent">{SOURCE_LABELS[manga.sourceId] || manga.sourceId}</span>
+                {manga.type && <span className="chip">{manga.type}</span>}
+                <span className="chip">{STATUS_LABELS[manga.status]}</span>
+                {manga.ageRating && (
+                  <span className={`chip ${manga.isAdult ? 'chip-danger' : ''}`}>{manga.ageRating}</span>
+                )}
               </div>
 
               <h1 className="detail-title">{manga.title}</h1>
-              {manga.altTitle && (
-                <div className="detail-alt-title">{manga.altTitle}</div>
-              )}
+              {manga.altTitle && <div className="detail-alt">{manga.altTitle}</div>}
 
-              <div style={{ fontSize: '0.88rem', color: 'var(--text-muted)' }}>
-                Авторы: <strong style={{ color: 'var(--text-primary)' }}>{manga.authors.join(', ')}</strong>
+              <div className="stats">
+                {manga.rating > 0 && (
+                  <div className="stat">
+                    <b style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <IconStar size={16} style={{ color: 'var(--yellow)' }} />
+                      {manga.rating.toFixed(1)}
+                    </b>
+                    <span>Рейтинг</span>
+                  </div>
+                )}
+                <div className="stat">
+                  <b>{chapters.length}</b>
+                  <span>{plural(chapters.length, ['глава', 'главы', 'глав'])}</span>
+                </div>
+                {manga.authors.length > 0 && (
+                  <div className="stat" style={{ minWidth: 0 }}>
+                    <b style={{ fontSize: '0.95rem' }}>{manga.authors.slice(0, 3).join(', ')}</b>
+                    <span>Авторы</span>
+                  </div>
+                )}
               </div>
 
-              {/* Genre Chips */}
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                {manga.genres.map(g => (
-                  <span key={g} className="chip">{g}</span>
-                ))}
-              </div>
-
-              {/* Description */}
-              <p style={{ color: 'var(--text-secondary)', lineHeight: 1.6, fontSize: '0.95rem', maxWidth: '780px' }}>
-                {manga.description}
-              </p>
-
-              {/* Action Buttons */}
-              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem' }}>
-                {continueChapterId && (
-                  <Link href={`/read/${manga.id}/${continueChapterId}`} className="btn btn-primary">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polygon points="5 3 19 12 5 21 5 3"/>
-                    </svg>
-                    {continueText}
+              <div className="detail-actions">
+                {continueTarget && (
+                  <Link href={`/read/${manga.id}/${continueTarget.id}`} className="btn btn-primary">
+                    <IconPlay size={16} />
+                    {continueLabel}
                   </Link>
                 )}
-
-                {/* Library Status Selector */}
-                <div style={{ position: 'relative' }}>
-                  <select
-                    className="btn btn-secondary"
-                    value={libraryStatus || ''}
-                    onChange={e => handleStatusChange(e.target.value as ReadingStatus)}
-                    style={{ paddingRight: '2rem', cursor: 'pointer' }}
-                  >
-                    <option value="" disabled>+ Добавить в библиотеку</option>
-                    <option value="reading">📖 Читаю</option>
-                    <option value="planned">⭐ В планах</option>
-                    <option value="completed">✅ Прочитано</option>
-                    <option value="dropped">🛑 Брошено</option>
-                  </select>
-                </div>
+                <select
+                  className="select"
+                  value={libraryStatus || ''}
+                  onChange={e => onStatus(e.target.value)}
+                  aria-label="Статус в библиотеке"
+                >
+                  <option value="" disabled>
+                    + В библиотеку
+                  </option>
+                  {(Object.keys(READING_STATUS_LABELS) as ReadingStatus[]).map(s => (
+                    <option key={s} value={s}>
+                      {READING_STATUS_LABELS[s]}
+                    </option>
+                  ))}
+                  {libraryStatus && <option value="remove">Удалить из библиотеки</option>}
+                </select>
+                {manga.sourceUrl && (
+                  <a href={manga.sourceUrl} target="_blank" rel="noopener noreferrer" className="btn btn-secondary">
+                    <IconExternal size={16} /> На сайте
+                  </a>
+                )}
               </div>
+
+              {manga.description && (
+                <>
+                  <p className={`description ${expanded ? '' : 'clamped'}`}>{manga.description}</p>
+                  {manga.description.length > 280 && (
+                    <button className="link-btn" onClick={() => setExpanded(v => !v)}>
+                      {expanded ? 'Свернуть' : 'Подробнее'}
+                    </button>
+                  )}
+                </>
+              )}
+
+              {manga.genres.length > 0 && (
+                <div className="chip-wrap">
+                  {manga.genres.slice(0, expanded ? undefined : 14).map(g => (
+                    <span key={g} className="chip">
+                      {g}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Chapters Section */}
-      <div className="container" style={{ padding: '2.5rem 1.25rem 5rem' }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '1rem',
-          borderBottom: '1px solid var(--border-subtle)',
-          paddingBottom: '1rem'
-        }}>
+      <div className="container">
+        <div className="chapters-head">
           <div>
-            <h2 style={{ fontSize: '1.4rem', fontWeight: 700 }}>
-              Список глав ({chapters.length})
-            </h2>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              Все главы доступны для онлайн-чтения
-            </p>
+            <h2 className="section-title">Главы</h2>
+            <div className="muted" style={{ fontSize: '0.84rem' }}>
+              {readSet.size > 0 ? `Прочитано ${readSet.size} из ${chapters.length}` : `${chapters.length} всего`}
+            </div>
           </div>
-
-          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-            <input
-              type="text"
-              placeholder="Номер главы..."
-              className="search-input"
-              style={{ width: '150px', padding: '0.45rem 0.75rem', fontSize: '0.85rem' }}
-              value={chapterFilter}
-              onChange={e => setChapterFilter(e.target.value)}
-            />
-
-            <button
-              onClick={() => setSortAsc(!sortAsc)}
-              className="btn btn-secondary btn-sm"
-              title="Переключить порядок"
-            >
-              {sortAsc ? 'Сначала старые ↑' : 'Сначала новые ↓'}
+          <div className="filter-row">
+            <label className="input-icon-wrap" style={{ minWidth: 200 }}>
+              <IconSearch size={16} />
+              <input
+                className="input"
+                placeholder="Номер или название"
+                value={filter}
+                onChange={e => {
+                  setFilter(e.target.value);
+                  setLimit(PAGE);
+                }}
+                style={{ padding: '0.55rem 0.9rem 0.55rem 2.4rem' }}
+              />
+            </label>
+            <button className="btn btn-secondary btn-sm" onClick={() => setSortAsc(v => !v)}>
+              <IconSort size={15} />
+              {sortAsc ? 'Сначала старые' : 'Сначала новые'}
             </button>
           </div>
         </div>
 
-        {/* Chapters list items */}
-        <div className="chapter-list">
-          {filteredChapters.length === 0 ? (
-            <div style={{ padding: '2rem 0', color: 'var(--text-muted)', textAlign: 'center' }}>
-              Главы не найдены
-            </div>
-          ) : (
-            filteredChapters.map(ch => {
+        {data.chaptersError && <div className="notice error">Не удалось загрузить главы: {data.chaptersError}</div>}
+
+        {visible.length === 0 ? (
+          <div className="empty-state">
+            <h3>{chapters.length === 0 ? 'Глав пока нет' : 'Главы не найдены'}</h3>
+            {chapters.length === 0 && manga.sourceId === 'mangalib' && (
+              <p>Возможно, тайтл лицензирован и закрыт на MangaLib без авторизации.</p>
+            )}
+          </div>
+        ) : (
+          <div className="chapter-list">
+            {visible.slice(0, limit).map(ch => {
               const isCurrent = progress?.chapterId === ch.id;
+              const isRead = readSet.has(ch.id);
               return (
                 <Link
                   key={ch.id}
                   href={`/read/${manga.id}/${ch.id}`}
-                  className="chapter-item"
-                  style={{
-                    borderColor: isCurrent ? 'var(--accent-primary)' : 'var(--border-subtle)',
-                    background: isCurrent ? 'rgba(255, 103, 64, 0.08)' : 'var(--bg-card)'
-                  }}
+                  className={`chapter-item ${isCurrent ? 'current' : ''} ${isRead ? 'read' : ''}`}
+                  prefetch={false}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    {isCurrent && (
-                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent-primary)' }} />
+                  <div style={{ minWidth: 0 }}>
+                    <div className="chapter-title">{ch.title}</div>
+                    {(ch.scanlationGroup || isCurrent) && (
+                      <div className="chapter-sub">
+                        {isCurrent && progress
+                          ? `Вы здесь · стр. ${progress.pageIndex} из ${progress.totalPages}`
+                          : ch.scanlationGroup}
+                      </div>
                     )}
-                    <span className="chapter-title">{ch.title}</span>
                   </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    {ch.releaseDate && (
-                      <span className="chapter-date">{ch.releaseDate}</span>
-                    )}
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-muted)' }}>
-                      <polyline points="9 18 15 12 9 6"/>
-                    </svg>
+                  <div className="chapter-meta">
+                    {ch.releaseDate && <span>{formatDate(ch.releaseDate)}</span>}
+                    {isRead && <IconCheck size={16} style={{ color: 'var(--green)' }} />}
                   </div>
                 </Link>
               );
-            })
-          )}
-        </div>
+            })}
+          </div>
+        )}
+
+        {visible.length > limit && (
+          <div style={{ textAlign: 'center', marginTop: '1.25rem' }}>
+            <button className="btn btn-secondary" onClick={() => setLimit(l => l + PAGE * 3)}>
+              Показать ещё ({visible.length - limit})
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

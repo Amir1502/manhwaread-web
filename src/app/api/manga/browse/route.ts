@@ -1,29 +1,33 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { AVAILABLE_SOURCES, getPopularManga, searchManga } from '@/lib/sources';
+import { NextRequest } from 'next/server';
+import { jsonError, jsonOk } from '@/lib/api';
+import { browse, listSources } from '@/lib/sources';
+import { SortMode } from '@/lib/types';
 
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const q = searchParams.get('q') || '';
-  const source = searchParams.get('source') || 'all';
+  const sp = request.nextUrl.searchParams;
+  const adult = sp.get('adult') === '1';
+  const page = Math.min(Math.max(parseInt(sp.get('page') || '1', 10) || 1, 1), 500);
+  const sort: SortMode = sp.get('sort') === 'latest' ? 'latest' : 'popular';
 
   try {
-    let mangas;
-    if (q.trim()) {
-      mangas = await searchManga(q, source);
-    } else {
-      mangas = await getPopularManga(source);
-    }
-
-    return NextResponse.json({
-      success: true,
-      mangas,
-      sources: AVAILABLE_SOURCES
+    const result = await browse({
+      source: sp.get('source') || 'all',
+      query: (sp.get('q') || '').slice(0, 120),
+      page,
+      sort,
+      adult,
     });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return NextResponse.json(
-      { success: false, error: message },
-      { status: 500 }
+    return jsonOk(
+      {
+        mangas: result.items,
+        hasNextPage: result.hasNextPage,
+        errors: result.errors,
+        page,
+        sources: listSources(adult),
+      },
+      300,
     );
+  } catch (err) {
+    return jsonError(err);
   }
 }

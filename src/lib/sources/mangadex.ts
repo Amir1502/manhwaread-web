@@ -1,37 +1,20 @@
-import { SManga, SChapter, Page } from '../types';
+import { MangaListResult, Page, SChapter, SManga, SortMode } from '../types';
+import { MangaSource, makeMangaId, proxied } from './base';
+import { cached, getJson, toIsoDate } from './http';
 
-const MANGADEX_API = 'https://api.mangadex.org';
-const MANGADEX_UPLOADS = 'https://uploads.mangadex.org';
-const TIMEOUT_MS = 6000;
-
-async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  try {
-    const res = await fetch(url, {
-      ...init,
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'ManhwaReadWeb/1.0.0 (https://github.com/Amir1502/manhwaread)',
-        ...(init?.headers || {})
-      }
-    });
-    return res;
-  } finally {
-    clearTimeout(id);
-  }
-}
+const API = 'https://api.mangadex.org';
+const UPLOADS = 'https://uploads.mangadex.org';
+const PAGE_SIZE = 24;
+const HEADERS = { 'User-Agent': 'ManhwaReadWeb/1.1 (+https://github.com/Amir1502/manhwaread-web)' };
+const RATINGS = 'contentRating[]=safe&contentRating[]=suggestive';
 
 interface MangaDexRelationship {
   id: string;
   type: string;
-  attributes?: {
-    fileName?: string;
-    name?: string;
-  };
+  attributes?: { fileName?: string; name?: string };
 }
 
-interface MangaDexItem {
+export interface MangaDexItem {
   id: string;
   type: string;
   attributes: {
@@ -39,161 +22,212 @@ interface MangaDexItem {
     altTitles?: Array<Record<string, string>>;
     description?: Record<string, string>;
     status?: string;
-    tags?: Array<{ attributes: { name: Record<string, string> } }>;
+    contentRating?: string;
+    originalLanguage?: string;
+    tags?: Array<{ attributes: { name: Record<string, string>; group?: string } }>;
     updatedAt?: string;
   };
   relationships?: MangaDexRelationship[];
 }
 
+const TYPE_BY_LANG: Record<string, string> = {
+  ko: 'Манхва',
+  ja: 'Манга',
+  zh: 'Маньхуа',
+  'zh-hk': 'Маньхуа',
+  en: 'Комикс',
+};
+
+function pickLocalized(rec: Record<string, string> | undefined): string | undefined {
+  if (!rec) return undefined;
+  return rec.ru || rec.en || rec['ja-ro'] || rec['ko-ro'] || Object.values(rec)[0];
+}
+
 export function parseMangaDexItem(item: MangaDexItem): SManga {
-  const title = item.attributes.title.ru || item.attributes.title.en || Object.values(item.attributes.title)[0] || 'Без названия';
-  
-  let altTitle: string | undefined;
-  if (item.attributes.altTitles && item.attributes.altTitles.length > 0) {
-    const firstAlt = item.attributes.altTitles[0];
-    altTitle = firstAlt.ru || firstAlt.en || Object.values(firstAlt)[0];
-  }
+  const a = item.attributes;
+  const ruAlt = a.altTitles?.find(t => t.ru)?.ru;
+  const enAlt = a.altTitles?.find(t => t.en)?.en;
+  const main = pickLocalized(a.title) || 'Без названия';
+  const title = a.title.ru || ruAlt || main;
+  const altTitle = title !== main ? main : enAlt && enAlt !== title ? enAlt : undefined;
 
-  const desc = item.attributes.description?.ru || item.attributes.description?.en || Object.values(item.attributes.description || {})[0] || 'Описание отсутствует.';
-  
-  const coverRel = item.relationships?.find(r => r.type === 'cover_art');
-  const coverFileName = coverRel?.attributes?.fileName;
-  const coverUrl = coverFileName 
-    ? `${MANGADEX_UPLOADS}/covers/${item.id}/${coverFileName}.512.jpg`
-    : 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=800&q=80';
+  const coverFile = item.relationships?.find(r => r.type === 'cover_art')?.attributes?.fileName;
+  const coverUrl = coverFile ? proxied(`${UPLOADS}/covers/${item.id}/${coverFile}.512.jpg`, 'mangadex') : '';
 
-  const authorRels = item.relationships?.filter(r => r.type === 'author' || r.type === 'artist') || [];
-  const authors = authorRels.map(a => a.attributes?.name || 'Автор неизвестен').filter(Boolean);
+  const authors = Array.from(
+    new Set(
+      (item.relationships || [])
+        .filter(r => r.type === 'author' || r.type === 'artist')
+        .map(r => r.attributes?.name)
+        .filter((n): n is string => Boolean(n)),
+    ),
+  );
 
-  const genres = (item.attributes.tags || [])
+  const genres = (a.tags || [])
+    .filter(t => !t.attributes.group || t.attributes.group === 'genre' || t.attributes.group === 'theme')
     .map(t => t.attributes.name.ru || t.attributes.name.en || '')
-    .filter(Boolean)
-    .slice(0, 5);
+    .filter(Boolean);
 
-  let status: SManga['status'] = 'UNKNOWN';
-  if (item.attributes.status === 'ongoing') status = 'ONGOING';
-  else if (item.attributes.status === 'completed') status = 'COMPLETED';
-  else if (item.attributes.status === 'hiatus') status = 'HIATUS';
+  const statusMap: Record<string, SManga['status']> = {
+    ongoing: 'ONGOING',
+    completed: 'COMPLETED',
+    hiatus: 'HIATUS',
+    cancelled: 'CANCELLED',
+  };
 
   return {
-    id: `md-${item.id}`,
+    id: makeMangaId('mangadex', item.id),
     sourceId: 'mangadex',
     title,
     altTitle,
-    description: desc,
+    description: pickLocalized(a.description) || '',
     coverUrl,
-    authors: authors.length > 0 ? authors : ['MangaDex'],
-    status,
-    rating: 9.4,
-    genres: genres.length > 0 ? genres : ['Манхва', 'Экшен'],
-    lastUpdated: item.attributes.updatedAt?.split('T')[0] || '2026-10-09'
+    authors,
+    status: statusMap[a.status || ''] || 'UNKNOWN',
+    rating: 0,
+    genres,
+    type: TYPE_BY_LANG[a.originalLanguage || ''],
+    isAdult: a.contentRating === 'erotica' || a.contentRating === 'pornographic',
+    lastUpdated: toIsoDate(a.updatedAt),
+    sourceUrl: `https://mangadex.org/title/${item.id}`,
   };
 }
 
-export async function fetchMangaDexPopular(limit = 20): Promise<SManga[]> {
+async function listQuery(query: string, page: number): Promise<MangaListResult> {
+  const offset = (Math.max(1, page) - 1) * PAGE_SIZE;
+  const url = `${API}/manga?limit=${PAGE_SIZE}&offset=${offset}&includes[]=cover_art&includes[]=author&${RATINGS}&hasAvailableChapters=true&availableTranslatedLanguage[]=ru&availableTranslatedLanguage[]=en&${query}`;
+  const data = await getJson<{ data: MangaDexItem[]; total: number }>(url, { headers: HEADERS });
+  return {
+    items: (data.data || []).map(parseMangaDexItem),
+    hasNextPage: offset + PAGE_SIZE < Math.min(data.total || 0, 10000),
+  };
+}
+
+async function fetchRatings(ids: string[]): Promise<Record<string, number>> {
+  if (ids.length === 0) return {};
   try {
-    const url = `${MANGADEX_API}/manga?limit=${limit}&includes[]=cover_art&includes[]=author&order[followedCount]=desc&contentRating[]=safe&contentRating[]=suggestive&hasAvailableChapters=true`;
-    const res = await fetchWithTimeout(url);
-    if (!res.ok) throw new Error(`MangaDex returned ${res.status}`);
-    const data = await res.json();
-    return (data.data || []).map(parseMangaDexItem);
-  } catch (err) {
-    console.warn('MangaDex popular fetch failed, returning empty:', err);
-    return [];
+    const qs = ids.map(id => `manga[]=${id}`).join('&');
+    const data = await getJson<{ statistics: Record<string, { rating?: { bayesian?: number } }> }>(
+      `${API}/statistics/manga?${qs}`,
+      { headers: HEADERS, timeoutMs: 5000, retries: 0 },
+    );
+    const out: Record<string, number> = {};
+    for (const [id, s] of Object.entries(data.statistics || {}))
+      out[id] = Math.round((s.rating?.bayesian || 0) * 10) / 10;
+    return out;
+  } catch {
+    return {};
   }
 }
 
-export async function searchMangaDex(query: string, limit = 20): Promise<SManga[]> {
-  try {
-    const encoded = encodeURIComponent(query);
-    const url = `${MANGADEX_API}/manga?title=${encoded}&limit=${limit}&includes[]=cover_art&includes[]=author&contentRating[]=safe&contentRating[]=suggestive`;
-    const res = await fetchWithTimeout(url);
-    if (!res.ok) throw new Error(`MangaDex search returned ${res.status}`);
-    const data = await res.json();
-    return (data.data || []).map(parseMangaDexItem);
-  } catch (err) {
-    console.warn('MangaDex search failed:', err);
-    return [];
-  }
-}
-
-export async function fetchMangaDexDetails(rawId: string): Promise<SManga | null> {
-  const mangaId = rawId.replace(/^md-/, '');
-  try {
-    const url = `${MANGADEX_API}/manga/${mangaId}?includes[]=cover_art&includes[]=author`;
-    const res = await fetchWithTimeout(url);
-    if (!res.ok) return null;
-    const data = await res.json();
-    return parseMangaDexItem(data.data);
-  } catch (err) {
-    console.warn('MangaDex details failed:', err);
-    return null;
-  }
-}
-
-interface MangaDexChapterItem {
+export interface MangaDexChapterItem {
   id: string;
   attributes: {
-    chapter: string;
-    title?: string;
+    chapter: string | null;
+    volume?: string | null;
+    title?: string | null;
     publishAt?: string;
+    readableAt?: string;
     pages?: number;
+    externalUrl?: string | null;
+    translatedLanguage?: string;
   };
   relationships?: MangaDexRelationship[];
 }
 
-export async function fetchMangaDexChapters(rawId: string): Promise<SChapter[]> {
-  const mangaId = rawId.replace(/^md-/, '');
-  try {
-    // Look for Russian chapters first, then English
-    const url = `${MANGADEX_API}/manga/${mangaId}/feed?translatedLanguage[]=ru&translatedLanguage[]=en&order[chapter]=desc&limit=100`;
-    const res = await fetchWithTimeout(url);
-    if (!res.ok) return [];
-    const data = await res.json();
-    const chapters: MangaDexChapterItem[] = data.data || [];
-
-    return chapters.map(ch => {
-      const num = parseFloat(ch.attributes.chapter) || 0;
-      const title = ch.attributes.title 
-        ? `Глава ${ch.attributes.chapter}: ${ch.attributes.title}`
-        : `Глава ${ch.attributes.chapter || '1'}`;
-      const group = ch.relationships?.find(r => r.type === 'scanlation_group')?.attributes?.name;
-      
+/** Keeps one translation per chapter number (prefers RU), skips external-only chapters. Newest first. */
+export function normalizeMangaDexChapters(mangaId: string, items: MangaDexChapterItem[]): SChapter[] {
+  const byKey = new Map<string, MangaDexChapterItem>();
+  for (const ch of items) {
+    if (ch.attributes.externalUrl || (ch.attributes.pages ?? 1) === 0) continue;
+    const key = ch.attributes.chapter ?? `oneshot-${ch.id}`;
+    const existing = byKey.get(key);
+    if (!existing || (existing.attributes.translatedLanguage !== 'ru' && ch.attributes.translatedLanguage === 'ru')) {
+      byKey.set(key, ch);
+    }
+  }
+  return Array.from(byKey.values())
+    .map(ch => {
+      const num = parseFloat(ch.attributes.chapter || '0') || 0;
+      const vol = ch.attributes.volume ? parseInt(ch.attributes.volume, 10) : undefined;
+      const lang = ch.attributes.translatedLanguage === 'en' ? ' [EN]' : '';
+      const base = ch.attributes.chapter ? `Глава ${ch.attributes.chapter}` : 'Ваншот';
       return {
-        id: `md-ch-${ch.id}`,
-        mangaId: rawId,
+        id: ch.id,
+        mangaId,
         sourceId: 'mangadex',
         number: num,
-        title,
-        releaseDate: ch.attributes.publishAt?.split('T')[0] || '2026-10-09',
-        scanlationGroup: group || 'MangaDex',
-        pagesCount: ch.attributes.pages || 0
-      };
+        volume: Number.isFinite(vol) ? vol : undefined,
+        title: `${base}${ch.attributes.title ? `: ${ch.attributes.title}` : ''}${lang}`,
+        releaseDate: toIsoDate(ch.attributes.readableAt || ch.attributes.publishAt),
+        scanlationGroup: ch.relationships?.find(r => r.type === 'scanlation_group')?.attributes?.name,
+        pagesCount: ch.attributes.pages || undefined,
+      } satisfies SChapter;
+    })
+    .sort((a, b) => b.number - a.number);
+}
+
+export const mangadexSource: MangaSource = {
+  meta: {
+    id: 'mangadex',
+    name: 'MangaDex',
+    lang: 'ru/en',
+    baseUrl: 'https://mangadex.org',
+    isOnline: true,
+    supportsSearch: true,
+  },
+  imageReferer: 'https://mangadex.org/',
+  imageHosts: [/(^|\.)mangadex\.org$/, /(^|\.)mangadex\.network$/],
+
+  async list(sort: SortMode, page: number) {
+    const order = sort === 'latest' ? 'order[latestUploadedChapter]=desc' : 'order[followedCount]=desc';
+    const res = await listQuery(order, page);
+    const ratings = await fetchRatings(res.items.map(m => m.id.split('~')[1]));
+    res.items.forEach(m => (m.rating = ratings[m.id.split('~')[1]] || 0));
+    return res;
+  },
+
+  async search(query: string, page: number) {
+    return listQuery(`title=${encodeURIComponent(query)}&order[relevance]=desc`, page);
+  },
+
+  async details(slug: string) {
+    const data = await getJson<{ data: MangaDexItem }>(
+      `${API}/manga/${encodeURIComponent(slug)}?includes[]=cover_art&includes[]=author&includes[]=artist`,
+      { headers: HEADERS },
+    );
+    const manga = parseMangaDexItem(data.data);
+    manga.rating = (await fetchRatings([slug]))[slug] || 0;
+    return manga;
+  },
+
+  chapters(slug: string) {
+    return cached(`md:ch:${slug}`, 5 * 60_000, async () => {
+      const all: MangaDexChapterItem[] = [];
+      for (let offset = 0; offset < 2000; offset += 500) {
+        const data = await getJson<{ data: MangaDexChapterItem[]; total: number }>(
+          `${API}/manga/${encodeURIComponent(slug)}/feed?translatedLanguage[]=ru&translatedLanguage[]=en&order[chapter]=desc&limit=500&offset=${offset}&includes[]=scanlation_group&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica&contentRating[]=pornographic`,
+          { headers: HEADERS },
+        );
+        all.push(...(data.data || []));
+        if (offset + 500 >= (data.total || 0)) break;
+      }
+      return normalizeMangaDexChapters(makeMangaId('mangadex', slug), all);
     });
-  } catch (err) {
-    console.warn('MangaDex chapters fetch failed:', err);
-    return [];
-  }
-}
+  },
 
-export async function fetchMangaDexPages(chapterRawId: string): Promise<Page[]> {
-  const chapterId = chapterRawId.replace(/^md-ch-/, '');
-  try {
-    const url = `${MANGADEX_API}/at-home/server/${chapterId}`;
-    const res = await fetchWithTimeout(url);
-    if (!res.ok) return [];
-    const data = await res.json();
-    const baseUrl = data.baseUrl;
-    const hash = data.chapter?.hash;
-    const files: string[] = data.chapter?.data || [];
-
-    return files.map((fileName, idx) => ({
+  async pages(_slug: string, chapterId: string) {
+    const data = await getJson<{
+      baseUrl: string;
+      chapter: { hash: string; data: string[]; dataSaver: string[] };
+    }>(`${API}/at-home/server/${encodeURIComponent(chapterId)}`, { headers: HEADERS });
+    const { baseUrl, chapter } = data;
+    return (chapter?.data || []).map((file, idx): Page => ({
       index: idx + 1,
-      imageUrl: `${baseUrl}/data/${hash}/${fileName}`,
-      fallbackUrl: `${baseUrl}/data-saver/${hash}/${data.chapter?.dataSaver?.[idx] || fileName}`,
+      imageUrl: `${baseUrl}/data/${chapter.hash}/${file}`,
+      fallbackUrl: chapter.dataSaver?.[idx]
+        ? `${baseUrl}/data-saver/${chapter.hash}/${chapter.dataSaver[idx]}`
+        : undefined,
     }));
-  } catch (err) {
-    console.warn('MangaDex chapter pages failed:', err);
-    return [];
-  }
-}
+  },
+};

@@ -1,6 +1,11 @@
 export type ReadingStatus = 'reading' | 'planned' | 'completed' | 'dropped';
 
+export type MangaStatus = 'ONGOING' | 'COMPLETED' | 'HIATUS' | 'CANCELLED' | 'UNKNOWN';
+
+export type SortMode = 'popular' | 'latest';
+
 export interface SManga {
+  /** Global id: `${sourceId}~${slug}` (legacy: `md-<uuid>` or demo slugs). */
   id: string;
   sourceId: string;
   title: string;
@@ -8,19 +13,26 @@ export interface SManga {
   description: string;
   coverUrl: string;
   authors: string[];
-  status: 'ONGOING' | 'COMPLETED' | 'HIATUS' | 'UNKNOWN';
+  status: MangaStatus;
+  /** 0..10, 0 = unknown */
   rating: number;
   genres: string[];
+  type?: string;
+  ageRating?: string;
+  isAdult?: boolean;
   totalChapters?: number;
   lastUpdated?: string;
   views?: number;
+  sourceUrl?: string;
 }
 
 export interface SChapter {
+  /** Source-local chapter id, URL-safe. */
   id: string;
   mangaId: string;
   sourceId: string;
   number: number;
+  volume?: number;
   title: string;
   releaseDate?: string;
   scanlationGroup?: string;
@@ -34,16 +46,13 @@ export interface SpeechBubble {
   y: number;
   width: number;
   height: number;
-  // Original text (e.g. KR / EN)
   originalText?: string;
-  // Translated text (RU)
   translatedText: string;
-  // Styling for crisp vector rendering
-  fontSize?: number; // percentage or pt relative to bubble
+  fontSize?: number;
   fontWeight?: 'normal' | 'bold' | 'bolder';
   fontFamily?: string;
   textColor?: string;
-  backgroundColor?: string; // bubble mask background (e.g. #FFFFFF or transparent)
+  backgroundColor?: string;
   padding?: number;
 }
 
@@ -61,11 +70,18 @@ export interface Page {
   overlay?: OverlaySpec;
 }
 
+export interface MangaListResult {
+  items: SManga[];
+  hasNextPage: boolean;
+}
+
 export interface ReadingProgress {
   mangaId: string;
   chapterId: string;
   chapterNumber: number;
   chapterTitle?: string;
+  mangaTitle?: string;
+  coverUrl?: string;
   pageIndex: number;
   totalPages: number;
   updatedAt: number;
@@ -86,4 +102,6 @@ export interface SourceMeta {
   baseUrl: string;
   isOnline: boolean;
   supportsSearch: boolean;
+  isAdult?: boolean;
+  note?: string;
 }
