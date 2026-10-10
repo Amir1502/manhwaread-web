@@ -9,7 +9,7 @@ export default function Footer() {
     <footer className="footer">
       <div className="container footer-inner">
         <div>
-          <div style={{ fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>ManhwaRead Web</div>
+          <div style={{ fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>Tsundoku Web</div>
           <div>
             Веб-версия Android-проекта{' '}
             <a href="https://github.com/Amir1502/manhwaread" target="_blank" rel="noopener noreferrer">

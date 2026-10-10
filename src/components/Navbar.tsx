@@ -18,10 +18,10 @@ export default function Navbar() {
   return (
     <header className="navbar">
       <div className="container navbar-inner">
-        <Link href="/" className="logo" aria-label="ManhwaRead — на главную">
-          <div className="logo-icon">MR</div>
+        <Link href="/" className="logo" aria-label="Tsundoku — на главную">
+          <div className="logo-icon">TD</div>
           <div>
-            Manhwa<span>Read</span>
+            Tsun<span>doku</span>
           </div>
         </Link>
 

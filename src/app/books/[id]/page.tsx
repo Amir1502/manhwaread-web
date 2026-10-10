@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const book = getBookById(id);
   if (!book) {
     return {
-      title: 'Книга не найдена | ManhwaRead',
+      title: 'Книга не найдена | Tsundoku',
     };
   }
 

@@ -13,12 +13,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const book = getBookById(id);
   if (!book) {
     return {
-      title: 'Книга не найдена | ManhwaRead',
+      title: 'Книга не найдена | Tsundoku',
     };
   }
 
   return {
-    title: `Читать онлайн: «${book.title}» — ${book.author} | ManhwaRead`,
+    title: `Читать онлайн: «${book.title}» — ${book.author} | Tsundoku`,
     description: `Удобное чтение онлайн без рекламы: «${book.title}» автора ${book.author}. Полный текст для подготовки к итоговому сочинению.`,
   };
 }

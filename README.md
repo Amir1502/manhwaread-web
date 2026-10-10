@@ -1,14 +1,14 @@
-# 📖 ManhwaRead Web
+# 📖 Tsundoku Web
 
 <div align="center">
 
 ![Next.js](https://img.shields.io/badge/Next.js-16.4.0-black?style=for-the-badge&logo=next.js)
 ![React](https://img.shields.io/badge/React-19.3.0-blue?style=for-the-badge&logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript)
-![Tests](https://img.shields.io/badge/Tests-39%20passed-22c55e?style=for-the-badge&logo=node.js)
+![Tests](https://img.shields.io/badge/Tests-51%20passed-22c55e?style=for-the-badge&logo=node.js)
 ![License](https://img.shields.io/badge/License-MIT-orange?style=for-the-badge)
 
-**Современная веб-читалка манхвы, манги и маньхуа с единым каталогом, фильтрами в стиле MangaLib, комментариями и системой аккаунтов.**
+**Современная веб-читалка манхвы, манги, маньхуа и литературы с единым каталогом, фильтрами в стиле MangaLib, комментариями и системой аккаунтов.**
 
 [🚀 Открыть онлайн на Render](https://manhwaread-web-9zyh.onrender.com/) • [✨ Демо AI-оверлея](https://manhwaread-web-9zyh.onrender.com/read/demo~ai-overlay/ch-1)
 

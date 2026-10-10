@@ -8,7 +8,7 @@ export async function GET() {
       status: 'ok',
       uptime: Math.floor(process.uptime()),
       timestamp: Date.now(),
-      service: 'manhwaread-web',
+      service: 'tsundoku-web',
     },
     {
       headers: {

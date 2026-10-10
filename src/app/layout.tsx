@@ -8,13 +8,13 @@ import { AuthProvider } from '@/lib/useAuth';
 const manrope = Manrope({ subsets: ['latin', 'cyrillic'], variable: '--font-sans', display: 'swap' });
 
 export const metadata: Metadata = {
-  title: { default: 'ManhwaRead — читалка манги и манхвы', template: '%s · ManhwaRead' },
+  title: { default: 'Tsundoku — читалка манги, манхвы и книг', template: '%s · Tsundoku' },
   description:
-    'Веб-читалка манхвы и манги: MangaLib, ReManga, MangaMir, MangaDex в одном каталоге, библиотека, история и векторный AI-оверлей перевода.',
-  keywords: ['читалка манги', 'манхва онлайн', 'manhwaread', 'mangalib', 'remanga', 'mangamir', 'mangadex'],
+    'Веб-читалка манхвы, манги и книг: единый каталог, библиотека, читалка литературы для сочинения и векторный AI-оверлей.',
+  keywords: ['читалка манги', 'манхва онлайн', 'tsundoku', 'книги', 'mangalib', 'remanga', 'mangamir', 'mangadex', 'com-x'],
   openGraph: {
-    title: 'ManhwaRead — читалка манги и манхвы',
-    description: 'Все источники в одном каталоге, библиотека, история и векторный AI-оверлей.',
+    title: 'Tsundoku — читалка манги, манхвы и книг',
+    description: 'Все источники в одном каталоге, библиотека литературы, история и векторный AI-оверлей.',
     type: 'website',
   },
 };
