@@ -2638,6 +2638,7 @@ button.chip:hover {
   padding: 1.2rem;
   display: flex;
   flex-direction: column;
+  overflow: clip;
 }
 
 /* Desktop: sticky inline sidebar */
@@ -2650,7 +2651,7 @@ button.chip:hover {
     top: calc(var(--nav-h) + 16px);
     height: calc(100vh - var(--nav-h) - 32px);
     max-height: calc(100vh - var(--nav-h) - 32px);
-    overflow: hidden;
+    overflow: clip;
   }
   .ml-filters-sidebar.open {
     display: flex;
@@ -2677,6 +2678,7 @@ button.chip:hover {
     box-shadow: -12px 0 40px rgba(0, 0, 0, 0.7);
     transform: translateX(100%);
     transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    overflow: clip;
   }
   .ml-filters-sidebar.open {
     transform: translateX(0);
@@ -2717,9 +2719,11 @@ button.chip:hover {
 }
 
 .ml-filters-body {
-  flex: 1;
+  flex: 1 1 0%;
   min-height: 0;
+  height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding-right: 6px;
   display: flex;
   flex-direction: column;

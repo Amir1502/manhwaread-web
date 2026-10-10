@@ -231,7 +231,12 @@ export function MangaLibSidebar({
       {sidebarOpen && <div className="ml-sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
 
       {/* Filter Sidebar / Drawer */}
-      <aside className={`ml-filters-sidebar ${sidebarOpen ? 'open' : ''}`}>
+      <aside
+        className={`ml-filters-sidebar ${sidebarOpen ? 'open' : ''}`}
+        onScroll={e => {
+          if (e.currentTarget.scrollTop !== 0) e.currentTarget.scrollTop = 0;
+        }}
+      >
         <div className="ml-filters-header">
           <h3>Фильтры</h3>
           <button
@@ -245,7 +250,47 @@ export function MangaLibSidebar({
         </div>
 
         <div className="ml-filters-body">
-          {/* 1. Жанры */}
+          {/* 1. Тип (Манхва, Маньхуа, Манга...) */}
+          <div className="ml-filter-group">
+            <h4 className="ml-filter-title">Тип</h4>
+            <div className="ml-chips-wrap">
+              {MANGALIB_TYPES.map(t => {
+                const active = filters.types?.includes(t);
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    className={`ml-filter-chip ${active ? 'active' : ''}`}
+                    onClick={() => toggleArrayItem('types', t)}
+                  >
+                    {t}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 2. Статус тайтла */}
+          <div className="ml-filter-group">
+            <h4 className="ml-filter-title">Статус тайтла</h4>
+            <div className="ml-chips-wrap">
+              {MANGALIB_STATUSES.map(s => {
+                const active = filters.status?.includes(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className={`ml-filter-chip ${active ? 'active' : ''}`}
+                    onClick={() => toggleArrayItem('status', s.id)}
+                  >
+                    {s.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 3. Жанры */}
           <div className="ml-filter-group">
             <h4 className="ml-filter-title">Жанры</h4>
             <div className="ml-chips-wrap">
@@ -265,7 +310,7 @@ export function MangaLibSidebar({
             </div>
           </div>
 
-          {/* 2. Теги */}
+          {/* 4. Теги */}
           <div className="ml-filter-group">
             <h4 className="ml-filter-title">Теги</h4>
             <div className="ml-chips-wrap">
@@ -285,7 +330,7 @@ export function MangaLibSidebar({
             </div>
           </div>
 
-          {/* 3. Числовые диапазоны */}
+          {/* 5. Числовые диапазоны */}
           <div className="ml-filter-group">
             <h4 className="ml-filter-title">Количество глав</h4>
             <div className="ml-range-row">
@@ -391,93 +436,63 @@ export function MangaLibSidebar({
             </div>
           </div>
 
-          {/* 4. Возрастной рейтинг */}
+          {/* 8. Возрастной рейтинг */}
           <div className="ml-filter-group">
             <h4 className="ml-filter-title">Возрастной рейтинг</h4>
-            <div className="ml-checkbox-grid">
-              {MANGALIB_AGE_RATINGS.map(ar => (
-                <label key={ar} className="ml-checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={filters.ageRatings?.includes(ar) || false}
-                    onChange={() => toggleArrayItem('ageRatings', ar)}
-                  />
-                  <span className="ml-custom-checkbox" />
-                  <span>{ar}</span>
-                </label>
-              ))}
+            <div className="ml-chips-wrap">
+              {MANGALIB_AGE_RATINGS.map(ar => {
+                const active = filters.ageRatings?.includes(ar);
+                return (
+                  <button
+                    key={ar}
+                    type="button"
+                    className={`ml-filter-chip ${active ? 'active' : ''}`}
+                    onClick={() => toggleArrayItem('ageRatings', ar)}
+                  >
+                    {ar}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* 5. Тип */}
-          <div className="ml-filter-group">
-            <h4 className="ml-filter-title">Тип</h4>
-            <div className="ml-checkbox-grid">
-              {MANGALIB_TYPES.map(t => (
-                <label key={t} className="ml-checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={filters.types?.includes(t) || false}
-                    onChange={() => toggleArrayItem('types', t)}
-                  />
-                  <span className="ml-custom-checkbox" />
-                  <span>{t}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* 6. Формат выпуска */}
+          {/* 9. Формат выпуска */}
           <div className="ml-filter-group">
             <h4 className="ml-filter-title">Формат выпуска</h4>
-            <div className="ml-checkbox-grid">
-              {MANGALIB_FORMATS.map(f => (
-                <label key={f} className="ml-checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={filters.formats?.includes(f) || false}
-                    onChange={() => toggleArrayItem('formats', f)}
-                  />
-                  <span className="ml-custom-checkbox" />
-                  <span>{f}</span>
-                </label>
-              ))}
+            <div className="ml-chips-wrap">
+              {MANGALIB_FORMATS.map(f => {
+                const active = filters.formats?.includes(f);
+                return (
+                  <button
+                    key={f}
+                    type="button"
+                    className={`ml-filter-chip ${active ? 'active' : ''}`}
+                    onClick={() => toggleArrayItem('formats', f)}
+                  >
+                    {f}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* 7. Статус тайтла */}
-          <div className="ml-filter-group">
-            <h4 className="ml-filter-title">Статус тайтла</h4>
-            <div className="ml-checkbox-grid">
-              {MANGALIB_STATUSES.map(s => (
-                <label key={s.id} className="ml-checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={filters.status?.includes(s.id) || false}
-                    onChange={() => toggleArrayItem('status', s.id)}
-                  />
-                  <span className="ml-custom-checkbox" />
-                  <span>{s.label}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* 8. Мои списки */}
+          {/* 10. Мои списки */}
           <div className="ml-filter-group">
             <h4 className="ml-filter-title">Мои списки</h4>
-            <div className="ml-checkbox-grid">
-              {MANGALIB_MY_LISTS.map(l => (
-                <label key={l.id} className="ml-checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={filters.myLists?.includes(l.id) || false}
-                    onChange={() => toggleArrayItem('myLists', l.id)}
-                  />
-                  <span className="ml-custom-checkbox" />
-                  <span>{l.label}</span>
-                </label>
-              ))}
+            <div className="ml-chips-wrap">
+              {MANGALIB_MY_LISTS.map(l => {
+                const active = filters.myLists?.includes(l.id);
+                return (
+                  <button
+                    key={l.id}
+                    type="button"
+                    className={`ml-filter-chip ${active ? 'active' : ''}`}
+                    onClick={() => toggleArrayItem('myLists', l.id)}
+                  >
+                    {l.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
