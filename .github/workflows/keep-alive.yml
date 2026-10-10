@@ -2,8 +2,8 @@ name: Keep-Alive Auto-Pinger
 
 on:
   schedule:
-    # Run every 10 minutes to prevent Render from spinning down
-    - cron: '*/10 * * * *'
+    # Run every 5 minutes to prevent Render from spinning down
+    - cron: '*/5 * * * *'
   workflow_dispatch:
   push:
     paths:
@@ -14,9 +14,9 @@ jobs:
     name: Ping ManhwaRead on Render
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Health Endpoint
+      - name: Ping Service
         run: |
-          URL="https://manhwaread-web.onrender.com/api/health"
+          URL="https://manhwaread-web.onrender.com/"
           echo "Pinging $URL at $(date -u)"
           
           # Retry up to 3 times in case Render is waking up
