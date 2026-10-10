@@ -61,7 +61,9 @@ class ComxClient {
   }
 
   private hasValidGuardCookie(): boolean {
-    return this.cookies.has('__guard_id');
+    return Array.from(this.cookies.keys()).some(
+      k => k.startsWith('__guard') || k.startsWith('__ddg') || k === 'PHPSESSID'
+    );
   }
 
   private async solveChallenge(html: string): Promise<void> {
@@ -98,17 +100,22 @@ class ComxClient {
     params.set('cdp', '0');
     params.set('cdpf', '');
 
-    const res = await fetch(`${COMX_BASE}/_v`, {
-      method: 'POST',
-      headers: {
-        'User-Agent': BROWSER_UA,
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Cookie': this.cookieString(),
-        Referer: `${COMX_BASE}/`,
-      },
-      body: params.toString(),
-    });
-    this.updateCookies(res);
+    try {
+      const res = await fetch(`${COMX_BASE}/_v`, {
+        method: 'POST',
+        headers: {
+          'User-Agent': BROWSER_UA,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Cookie': this.cookieString(),
+          Referer: `${COMX_BASE}/`,
+        },
+        body: params.toString(),
+      });
+      this.updateCookies(res);
+      console.log('[comx] Solved challenge, cookies:', Array.from(this.cookies.keys()).join(', '));
+    } catch (err) {
+      console.error('[comx] Error posting to /_v:', err);
+    }
   }
 
   private async ensureReady(): Promise<void> {
@@ -125,17 +132,21 @@ class ComxClient {
   }
 
   private async initSession(): Promise<void> {
-    const res = await fetch(`${COMX_BASE}/`, {
-      headers: {
-        'User-Agent': BROWSER_UA,
-        Accept: 'text/html,application/xhtml+xml',
-        'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8',
-      },
-    });
-    this.updateCookies(res);
-    const text = await res.text();
-    if (text.includes('token:')) {
-      await this.solveChallenge(text);
+    try {
+      const res = await fetch(`${COMX_BASE}/`, {
+        headers: {
+          'User-Agent': BROWSER_UA,
+          Accept: 'text/html,application/xhtml+xml',
+          'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8',
+        },
+      });
+      this.updateCookies(res);
+      const text = await res.text();
+      if (text.includes('token:')) {
+        await this.solveChallenge(text);
+      }
+    } catch (err) {
+      console.error('[comx] initSession error:', err);
     }
   }
 
@@ -149,31 +160,49 @@ class ComxClient {
       Referer: `${COMX_BASE}/`,
     };
 
-    const res = await fetch(url, { headers: reqHeaders });
+    let res = await fetch(url, { headers: reqHeaders });
     this.updateCookies(res);
-    const text = await res.text();
+    let text = await res.text();
 
-    if (res.status === 404 && text.includes('token:')) {
+    const isChallenge =
+      text.includes('token:') ||
+      text.includes('pow_nonce') ||
+      res.status === 401 ||
+      res.status === 403 ||
+      (res.status === 404 && text.includes('x18506'));
+
+    if (isChallenge) {
+      console.log(`[comx] Detected challenge on ${url} (status: ${res.status}), solving...`);
       if (!this.solvingPromise) {
-        this.solvingPromise = this.solveChallenge(text).finally(() => {
+        this.solvingPromise = (async () => {
+          if (text.includes('token:')) {
+            await this.solveChallenge(text);
+          } else {
+            await this.initSession();
+          }
+        })().finally(() => {
           this.solvingPromise = null;
         });
       }
       await this.solvingPromise;
-      const retry = await fetch(url, {
-        headers: {
-          ...reqHeaders,
-          Cookie: this.cookieString(),
-        },
-      });
-      this.updateCookies(retry);
-      if (!retry.ok) {
-        throw new SourceError(`HTTP ${retry.status} for ${new URL(url).host}`, retry.status);
+
+      const retryHeaders = {
+        ...reqHeaders,
+        Cookie: this.cookieString(),
+      };
+      res = await fetch(url, { headers: retryHeaders });
+      this.updateCookies(res);
+      text = await res.text();
+
+      if (!res.ok) {
+        console.error(`[comx] Retry failed: HTTP ${res.status}`, text.slice(0, 200));
+        throw new SourceError(`HTTP ${res.status} for ${new URL(url).host}`, res.status);
       }
-      return retry.text();
+      return text;
     }
 
     if (!res.ok) {
+      console.error(`[comx] Request failed: HTTP ${res.status}`, text.slice(0, 200));
       throw new SourceError(`HTTP ${res.status} for ${new URL(url).host}`, res.status);
     }
     return text;
