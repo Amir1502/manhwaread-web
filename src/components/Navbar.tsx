@@ -2,15 +2,16 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { IconBookmark, IconGithub, IconGrid } from './Icons';
+import { IconBookmark, IconBook, IconGithub, IconGrid } from './Icons';
 import UserMenu from './auth/UserMenu';
 
 export default function Navbar() {
   const pathname = usePathname();
-  if (pathname.startsWith('/read/')) return null;
+  if (pathname.startsWith('/read/') || pathname.includes('/read')) return null;
 
   const links = [
     { href: '/', label: 'Каталог', icon: <IconGrid />, active: pathname === '/' || pathname.startsWith('/manga/') },
+    { href: '/books', label: 'Книги', icon: <IconBook />, active: pathname.startsWith('/books') },
     { href: '/library', label: 'Библиотека', icon: <IconBookmark />, active: pathname.startsWith('/library') },
   ];
 
