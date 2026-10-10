@@ -195,15 +195,19 @@ class ComxClient {
       text = await res.text();
 
       if (!res.ok) {
-        console.error(`[comx] Retry failed: HTTP ${res.status}`, text.slice(0, 200));
-        throw new SourceError(`HTTP ${res.status} for ${new URL(url).host}`, res.status);
+        const title = text.match(/<title>([^<]+)<\/title>/i)?.[1] || 'no title';
+        const bodySnippet = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300);
+        console.error(`[comx] Retry failed: HTTP ${res.status} | Title: "${title}" | Text: "${bodySnippet}"`);
+        throw new SourceError(`HTTP ${res.status} for ${new URL(url).host}: ${title}`, res.status);
       }
       return text;
     }
 
     if (!res.ok) {
-      console.error(`[comx] Request failed: HTTP ${res.status}`, text.slice(0, 200));
-      throw new SourceError(`HTTP ${res.status} for ${new URL(url).host}`, res.status);
+      const title = text.match(/<title>([^<]+)<\/title>/i)?.[1] || 'no title';
+      const bodySnippet = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300);
+      console.error(`[comx] Request failed: HTTP ${res.status} | Title: "${title}" | Text: "${bodySnippet}"`);
+      throw new SourceError(`HTTP ${res.status} for ${new URL(url).host}: ${title}`, res.status);
     }
     return text;
   }
