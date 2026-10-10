@@ -168,7 +168,7 @@ export async function GET() {
 
     return NextResponse.json({
       logs,
-      firstLink,
+      realLink,
       readerUrl,
       detailsSnippet: tDetails.slice(0, 500),
       imagesSnippet: imagesMatch?.[1]?.slice(0, 300),
