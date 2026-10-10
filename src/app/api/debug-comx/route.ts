@@ -101,14 +101,37 @@ export async function GET() {
     const titleCat = tCat.match(/<title>([^<]+)<\/title>/i)?.[1] || '';
     logs.push(`4. GET /comix-read/ -> status: ${rCat.status}, title: "${titleCat}", len: ${tCat.length}`);
 
-    // 5. Check body snippet of 401 if present
-    const gateText = tCat.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 500);
+    // 5. Clean text of 401 gate
+    const cleanText = tCat.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // Check rss
+    let rssStatus = 0;
+    let rssItemsCount = 0;
+    try {
+      const rRss = await fetch('https://com-x.life/rss.xml', {
+        headers: { 'User-Agent': BROWSER_UA },
+      });
+      rssStatus = rRss.status;
+      const tRss = await rRss.text();
+      rssItemsCount = (tRss.match(/<item>/g) || []).length;
+    } catch (e: any) {
+      // ignore
+    }
+
+    // Extract forms / inputs from gate
+    const forms = Array.from(tCat.matchAll(/<form[^>]*>[\s\S]*?<\/form>/gi)).map(m => m[0].slice(0, 500));
 
     return NextResponse.json({
       logs,
       cookies: Array.from(cookieMap.entries()),
-      gateText,
-      rawCatSnippet: tCat.slice(0, 1500),
+      gateMessage: cleanText.slice(0, 1000),
+      forms,
+      rssStatus,
+      rssItemsCount,
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message, stack: err.stack, logs }, { status: 500 });
