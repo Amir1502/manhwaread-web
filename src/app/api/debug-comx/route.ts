@@ -139,32 +139,35 @@ export async function GET() {
     let tReader = '';
     let imagesMatch: RegExpMatchArray | null = null;
 
-    if (realLink) {
-      const detailsUrl = realLink.startsWith('http') ? realLink : `https://com-x.life${realLink}`;
-      const rDetails = await fetch(detailsUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)',
-          Cookie: cookieStr(),
-        },
-      });
-      tDetails = await rDetails.text();
-      hasData = tDetails.includes('window.__DATA__');
-      logs.push(`5d. GET details ${detailsUrl} -> status: ${rDetails.status}, len: ${tDetails.length}, has__DATA__: ${hasData}`);
+    // Test detail variations on https://com-x.life/34079-unylye-budni-juuko.html
+    const targetUrl = 'https://com-x.life/34079-unylye-budni-juuko.html';
 
-      const readerMatch = tDetails.match(/href=["'](\/reader\/[^"']+|https:\/\/com-x\.life\/reader\/[^"']+)["']/);
-      readerUrl = readerMatch?.[1] || '';
+    const testUas = [
+      { name: 'BrowserUA + Referer', ua: BROWSER_UA, referer: 'https://com-x.life/comix-read/' },
+      { name: 'YandexBot + Referer', ua: 'Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)', referer: 'https://com-x.life/comix-read/' },
+      { name: 'Googlebot + Referer', ua: 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)', referer: 'https://com-x.life/comix-read/' },
+      { name: 'Chrome Ru', ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36', referer: 'https://com-x.life/comix-read/' },
+    ];
 
-      if (readerUrl) {
-        const fullReaderUrl = readerUrl.startsWith('http') ? readerUrl : `https://com-x.life${readerUrl}`;
-        const rReader = await fetch(fullReaderUrl, {
+    for (const t of testUas) {
+      try {
+        const r = await fetch(targetUrl, {
           headers: {
-            'User-Agent': 'Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)',
+            'User-Agent': t.ua,
             Cookie: cookieStr(),
+            Referer: t.referer,
+            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'same-origin',
           },
         });
-        tReader = await rReader.text();
-        imagesMatch = tReader.match(/"images":\s*(\[[^\]]+\])/);
-        logs.push(`6. GET reader ${fullReaderUrl} -> status: ${rReader.status}, len: ${tReader.length}, hasImages: ${Boolean(imagesMatch)}`);
+        const text = await r.text();
+        const title = text.match(/<title>([^<]+)<\/title>/i)?.[1] || '';
+        logs.push(`Test [${t.name}]: status ${r.status}, title "${title}", len ${text.length}, has__DATA__: ${text.includes('window.__DATA__')}`);
+      } catch (e: any) {
+        logs.push(`Test [${t.name}] error: ${e.message}`);
       }
     }
 
