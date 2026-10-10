@@ -31,7 +31,7 @@ const DEFAULT_SOURCES: SourceMeta[] = [
   { id: 'all', name: 'Все источники', lang: 'ru', baseUrl: '', isOnline: true, supportsSearch: true },
   { id: 'mangalib', name: 'MangaLib', lang: 'ru', baseUrl: '', isOnline: true, supportsSearch: true },
   { id: 'remanga', name: 'ReManga', lang: 'ru', baseUrl: '', isOnline: true, supportsSearch: true },
-  { id: 'mangabuff', name: 'MangaBuff', lang: 'ru', baseUrl: '', isOnline: true, supportsSearch: true },
+  { id: 'comx', name: 'Com-X', lang: 'ru', baseUrl: '', isOnline: true, supportsSearch: true },
   { id: 'mangamir', name: 'MangaMir', lang: 'ru', baseUrl: '', isOnline: true, supportsSearch: true },
   { id: 'mangadex', name: 'MangaDex', lang: 'ru/en', baseUrl: '', isOnline: true, supportsSearch: true },
 ];
@@ -235,7 +235,7 @@ export default function HomePage() {
     <div className="container">
       <section className="hero">
         <div className="chip-wrap">
-          <span className="chip chip-accent">MangaLib · ReManga · MangaBuff · MangaMir · MangaDex</span>
+          <span className="chip chip-accent">MangaLib · ReManga · Com-X · MangaMir · MangaDex</span>
           <span className="chip chip-ai">
             <IconSparkle size={13} /> Векторный AI-оверлей
           </span>

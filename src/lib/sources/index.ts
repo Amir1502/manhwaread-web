@@ -2,8 +2,8 @@ import { MangaListResult, Page, SChapter, SManga, SortMode, SortOrder, SourceMet
 import { ID_SEPARATOR, MangaSource } from './base';
 import { DEMO_SLUG, LEGACY_DEMO_IDS, demoSource } from './demo';
 import { SourceError } from './http';
+import { comxSource } from './comx';
 import { manga18fxSource } from './manga18fx';
-import { mangabuffSource } from './mangabuff';
 import { mangadexSource } from './mangadex';
 import { mangalibSource } from './mangalib';
 import { mangamirSource } from './mangamir';
@@ -13,7 +13,7 @@ export const SOURCES: Record<string, MangaSource> = {
   mangalib: mangalibSource,
   remanga: remangaSource,
   mangamir: mangamirSource,
-  mangabuff: mangabuffSource,
+  comx: comxSource,
   mangadex: mangadexSource,
   manga18fx: manga18fxSource,
   demo: demoSource,

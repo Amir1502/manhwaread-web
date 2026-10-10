@@ -45,10 +45,10 @@ describe('Catalog Filters & Deduplication', () => {
         description: '',
       },
       {
-        id: 'mangabuff~3',
+        id: 'comx~3',
         title: 'Title With Unknown Chapters',
         coverUrl: '',
-        sourceId: 'mangabuff',
+        sourceId: 'comx',
         rating: 8.0,
         status: 'ONGOING',
         genres: ['Фэнтези'],
@@ -61,7 +61,7 @@ describe('Catalog Filters & Deduplication', () => {
     const filtered = mockMangaList.filter(m => m.totalChapters === undefined || m.totalChapters > 0);
     assert.strictEqual(filtered.length, 2);
     assert.strictEqual(filtered[0].id, 'remanga~2');
-    assert.strictEqual(filtered[1].id, 'mangabuff~3');
+    assert.strictEqual(filtered[1].id, 'comx~3');
   });
 
   it('deduplicates identical titles across sources preferring readable chapters', () => {
@@ -79,15 +79,15 @@ describe('Catalog Filters & Deduplication', () => {
         description: '',
       },
       {
-        id: 'mangabuff~solo-leveling',
+        id: 'comx~solo-leveling',
         title: 'Поднятие уровня в одиночку!',
         coverUrl: '',
-        sourceId: 'mangabuff',
+        sourceId: 'comx',
         rating: 9.8,
         status: 'COMPLETED',
         genres: ['Боевик', 'Фэнтези'],
         authors: [],
-        totalChapters: 200, // MangaBuff has all 200 chapters
+        totalChapters: 200, // Com-X has all 200 chapters
         description: '',
       },
       {
@@ -129,7 +129,7 @@ describe('Catalog Filters & Deduplication', () => {
     }
 
     assert.strictEqual(deduplicated.length, 2);
-    assert.strictEqual(deduplicated[0].id, 'mangabuff~solo-leveling');
+    assert.strictEqual(deduplicated[0].id, 'comx~solo-leveling');
     assert.strictEqual(deduplicated[0].totalChapters, 200);
     assert.strictEqual(deduplicated[1].id, 'remanga~omniscient-reader');
   });
@@ -207,14 +207,14 @@ describe('Catalog Filters & Deduplication', () => {
       return hasErrors && (effectiveSource !== 'all' || itemCount === 0);
     };
 
-    // When browsing 'all' and 4 sources returned 20 items, but MangaBuff failed: do NOT show banner
+    // When browsing 'all' and 4 sources returned 20 items, but Com-X failed: do NOT show banner
     assert.strictEqual(shouldShowNotice(true, 'all', 20), false);
 
     // When browsing 'all' and ALL sources failed (0 items): SHOW banner
     assert.strictEqual(shouldShowNotice(true, 'all', 0), true);
 
-    // When explicitly browsing 'mangabuff' and it failed: SHOW banner
-    assert.strictEqual(shouldShowNotice(true, 'mangabuff', 0), true);
+    // When explicitly browsing 'comx' and it failed: SHOW banner
+    assert.strictEqual(shouldShowNotice(true, 'comx', 0), true);
 
     // When no errors occurred: do NOT show banner
     assert.strictEqual(shouldShowNotice(false, 'all', 20), false);
