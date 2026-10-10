@@ -123,31 +123,48 @@ export async function GET() {
     const titleYandex = tYandex.match(/<title>([^<]+)<\/title>/i)?.[1] || '';
     logs.push(`4b. GET /comix-read/ (YandexBot UA) -> status: ${rYandex.status}, title: "${titleYandex}", len: ${tYandex.length}`);
 
-    // Experiment: Test details and reader with YandexBot UA
-    const rDetails = await fetch('https://com-x.life/34078-ja-pozhertvoval-lapshu-s-kimchi-v-chate-bogov.html', {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)',
-        Cookie: cookieStr(),
-      },
-    });
-    const tDetails = await rDetails.text();
-    const hasData = tDetails.includes('window.__DATA__');
-    logs.push(`5. GET details -> status: ${rDetails.status}, len: ${tDetails.length}, has__DATA__: ${hasData}`);
+    // Extract first 3 links from catalog
+    const cardLinks = Array.from(tYandex.matchAll(/href=["'](\/(?:[0-9]+-[^"']+\.html))["']/gi)).map(m => m[1]);
+    const firstLink = cardLinks[0] || '';
+    logs.push(`5a. First catalog links: ${cardLinks.slice(0, 3).join(', ')}`);
 
-    // Test reader
-    const rReader = await fetch('https://com-x.life/reader/34079/first', {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)',
-        Cookie: cookieStr(),
-      },
-    });
-    const tReader = await rReader.text();
-    const hasReaderData = tReader.includes('window.__DATA__');
-    const imagesMatch = tReader.match(/"images":\s*(\[[^\]]+\])/);
-    logs.push(`6. GET reader -> status: ${rReader.status}, len: ${tReader.length}, has__DATA__: ${hasReaderData}, hasImages: ${Boolean(imagesMatch)}`);
+    let tDetails = '';
+    let hasData = false;
+    let readerUrl = '';
+    let tReader = '';
+    let imagesMatch: RegExpMatchArray | null = null;
+
+    if (firstLink) {
+      const rDetails = await fetch(`https://com-x.life${firstLink}`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)',
+          Cookie: cookieStr(),
+        },
+      });
+      tDetails = await rDetails.text();
+      hasData = tDetails.includes('window.__DATA__');
+      logs.push(`5b. GET details ${firstLink} -> status: ${rDetails.status}, len: ${tDetails.length}, has__DATA__: ${hasData}`);
+
+      const readerMatch = tDetails.match(/href=["'](\/reader\/[^"']+)["']/);
+      readerUrl = readerMatch?.[1] || '';
+
+      if (readerUrl) {
+        const rReader = await fetch(`https://com-x.life${readerUrl}`, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)',
+            Cookie: cookieStr(),
+          },
+        });
+        tReader = await rReader.text();
+        imagesMatch = tReader.match(/"images":\s*(\[[^\]]+\])/);
+        logs.push(`6. GET reader ${readerUrl} -> status: ${rReader.status}, len: ${tReader.length}, hasImages: ${Boolean(imagesMatch)}`);
+      }
+    }
 
     return NextResponse.json({
       logs,
+      firstLink,
+      readerUrl,
       detailsSnippet: tDetails.slice(0, 500),
       imagesSnippet: imagesMatch?.[1]?.slice(0, 300),
     });
