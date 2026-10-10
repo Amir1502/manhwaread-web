@@ -39,7 +39,7 @@ function extractSlug(href?: string): string | null {
 
 /** Client that automatically solves DDoS-Guard challenge for com-x.life */
 class ComxClient {
-  private cookies = new Map<string, string>();
+  private cookies = new Map<string, string>([['cx_imghost', 'rus']]);
   private solvingPromise: Promise<void> | null = null;
 
   private cookieString(): string {
@@ -156,6 +156,10 @@ class ComxClient {
       'User-Agent': BROWSER_UA,
       Accept: 'text/html,application/xhtml+xml',
       'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8',
+      'X-Forwarded-For': '92.119.164.4',
+      'X-Real-IP': '92.119.164.4',
+      'CF-Connecting-IP': '92.119.164.4',
+      'True-Client-IP': '92.119.164.4',
       Cookie: this.cookieString(),
       Referer: `${COMX_BASE}/`,
     };
