@@ -19,7 +19,6 @@ export default function AuthModal({ isOpen, onClose, defaultTab = 'login' }: Aut
   const [loginPassword, setLoginPassword] = useState('');
 
   const [regUsername, setRegUsername] = useState('');
-  const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
 
   const [loading, setLoading] = useState(false);
@@ -44,7 +43,7 @@ export default function AuthModal({ isOpen, onClose, defaultTab = 'login' }: Aut
     e.preventDefault();
     setError(null);
     setLoading(true);
-    const res = await register(regUsername, regEmail, regPassword);
+    const res = await register(regUsername, regPassword);
     setLoading(false);
     if (res.ok) {
       onClose();
@@ -95,13 +94,13 @@ export default function AuthModal({ isOpen, onClose, defaultTab = 'login' }: Aut
         {tab === 'login' ? (
           <form onSubmit={handleLogin} className="auth-form">
             <div className="auth-field">
-              <label>Логин или Email</label>
+              <label>Логин</label>
               <input
                 type="text"
                 required
                 value={loginIdentifier}
                 onChange={e => setLoginIdentifier(e.target.value)}
-                placeholder="Ваш ник или email"
+                placeholder="Ваш логин"
                 autoComplete="username"
               />
             </div>
@@ -125,7 +124,7 @@ export default function AuthModal({ isOpen, onClose, defaultTab = 'login' }: Aut
         ) : (
           <form onSubmit={handleRegister} className="auth-form">
             <div className="auth-field">
-              <label>Имя пользователя (Никнейм)</label>
+              <label>Логин (Имя пользователя)</label>
               <input
                 type="text"
                 required
@@ -138,26 +137,14 @@ export default function AuthModal({ isOpen, onClose, defaultTab = 'login' }: Aut
             </div>
 
             <div className="auth-field">
-              <label>Электронная почта</label>
-              <input
-                type="email"
-                required
-                value={regEmail}
-                onChange={e => setRegEmail(e.target.value)}
-                placeholder="reader@example.com"
-                autoComplete="email"
-              />
-            </div>
-
-            <div className="auth-field">
               <label>Пароль</label>
               <input
                 type="password"
                 required
-                minLength={6}
+                minLength={4}
                 value={regPassword}
                 onChange={e => setRegPassword(e.target.value)}
-                placeholder="Минимум 6 символов"
+                placeholder="Минимум 4 символа"
                 autoComplete="new-password"
               />
             </div>

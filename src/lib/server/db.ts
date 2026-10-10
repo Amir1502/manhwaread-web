@@ -4,7 +4,7 @@ import path from 'path';
 export interface UserRecord {
   id: string;
   username: string;
-  email: string;
+  email?: string;
   passwordHash: string;
   salt: string;
   avatar: string;
@@ -95,15 +95,22 @@ export function saveDb(): void {
 }
 
 // User Helpers
-export function findUserByEmailOrUsername(identifier: string): UserRecord | null {
+export function findUserByUsername(username: string): UserRecord | null {
   const db = getDb();
-  const lower = identifier.trim().toLowerCase();
+  const lower = username.trim().toLowerCase();
   for (const user of Object.values(db.users)) {
-    if (user.email.toLowerCase() === lower || user.username.toLowerCase() === lower) {
+    if (user.username.trim().toLowerCase() === lower) {
+      return user;
+    }
+    if (user.email && user.email.toLowerCase() === lower) {
       return user;
     }
   }
   return null;
+}
+
+export function findUserByEmailOrUsername(identifier: string): UserRecord | null {
+  return findUserByUsername(identifier);
 }
 
 export function findUserById(id: string): UserRecord | null {

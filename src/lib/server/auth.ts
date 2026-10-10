@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { NextRequest } from 'next/server';
-import { UserRecord, findUserById } from './db';
+import { UserRecord, findUserById, saveUser } from './db';
 
 const SECRET = process.env.AUTH_SECRET || 'manhwaread_secret_key_change_in_production_2026';
 
@@ -12,7 +12,7 @@ export function toPublicUser(user: UserRecord): PublicUser {
   return {
     id: user.id,
     username: user.username,
-    email: user.email,
+    email: user.email || '',
     avatar: user.avatar,
     bio: user.bio,
     exp: user.exp,
@@ -35,21 +35,49 @@ export function verifyPassword(password: string, hash: string, salt: string): bo
   return hash === verifyHash;
 }
 
-export function createToken(userId: string): string {
-  const payload = Buffer.from(JSON.stringify({ uid: userId, exp: Date.now() + 30 * 24 * 3600 * 1000 })).toString('base64url');
+export interface TokenPayload {
+  uid: string;
+  u?: string;
+  h?: string;
+  s?: string;
+  a?: string;
+  b?: string;
+  e?: number;
+  c?: number;
+  exp: number;
+}
+
+export function createToken(user: UserRecord | string): string {
+  let payloadData: TokenPayload;
+  if (typeof user === 'string') {
+    payloadData = { uid: user, exp: Date.now() + 30 * 24 * 3600 * 1000 };
+  } else {
+    payloadData = {
+      uid: user.id,
+      u: user.username,
+      h: user.passwordHash,
+      s: user.salt,
+      a: user.avatar,
+      b: user.bio,
+      e: user.exp,
+      c: user.createdAt,
+      exp: Date.now() + 30 * 24 * 3600 * 1000,
+    };
+  }
+  const payload = Buffer.from(JSON.stringify(payloadData)).toString('base64url');
   const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('base64url');
   return `${payload}.${sig}`;
 }
 
-export function verifyToken(token: string): string | null {
+export function verifyToken(token: string): TokenPayload | null {
   try {
     const [payload, sig] = token.split('.');
     if (!payload || !sig) return null;
     const expectedSig = crypto.createHmac('sha256', SECRET).update(payload).digest('base64url');
     if (sig !== expectedSig) return null;
-    const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as TokenPayload;
     if (!data.uid || data.exp < Date.now()) return null;
-    return data.uid as string;
+    return data;
   } catch {
     return null;
   }
@@ -64,8 +92,27 @@ export function getUserFromRequest(req: NextRequest): UserRecord | null {
   }
 
   if (!token) return null;
-  const userId = verifyToken(token);
-  if (!userId) return null;
-  return findUserById(userId);
+  const tokenData = verifyToken(token);
+  if (!tokenData) return null;
+
+  let user = findUserById(tokenData.uid);
+  // Auto-restore user in memory/db if Render wiped the container
+  if (!user && tokenData.u && tokenData.h && tokenData.s) {
+    user = {
+      id: tokenData.uid,
+      username: tokenData.u,
+      passwordHash: tokenData.h,
+      salt: tokenData.s,
+      avatar: tokenData.a || 'https://api.dicebear.com/7.x/bottts/svg?seed=JinWoo',
+      bio: tokenData.b || '',
+      exp: tokenData.e || 0,
+      createdAt: tokenData.c || Date.now(),
+      bookmarks: [],
+      history: {},
+    };
+    saveUser(user);
+  }
+
+  return user;
 }
 

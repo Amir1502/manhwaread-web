@@ -52,13 +52,31 @@ test('auth & level calculations', async (t) => {
     assert.equal(verifyPassword('wrongpassword', hash, salt), false);
   });
 
-  await t.test('creates and verifies session tokens', () => {
+  await t.test('creates and verifies session tokens with auto-recovery', () => {
     const token = createToken('user-1234');
-    const uid = verifyToken(token);
-    assert.equal(uid, 'user-1234');
+    const tokenData = verifyToken(token);
+    assert.equal(tokenData?.uid, 'user-1234');
 
     const invalid = verifyToken('tampered.token');
     assert.equal(invalid, null);
+
+    // Test with full user record
+    const fullToken = createToken({
+      id: 'restored-user-1',
+      username: 'RestoredHero',
+      passwordHash: 'h1',
+      salt: 's1',
+      avatar: 'av',
+      bio: 'bio',
+      exp: 100,
+      createdAt: 12345,
+      bookmarks: [],
+      history: {},
+    });
+    const restoredData = verifyToken(fullToken);
+    assert.equal(restoredData?.uid, 'restored-user-1');
+    assert.equal(restoredData?.u, 'RestoredHero');
+    assert.equal(restoredData?.h, 'h1');
   });
 });
 

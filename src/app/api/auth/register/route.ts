@@ -7,24 +7,20 @@ import { findUserByEmailOrUsername, saveUser, UserRecord } from '@/lib/server/db
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { username, email, password } = body;
+    const { username, password } = body;
 
     if (!username || typeof username !== 'string' || username.trim().length < 3) {
       return jsonError('Имя пользователя должно быть не менее 3 символов', 400);
     }
-    if (!email || typeof email !== 'string' || !email.includes('@')) {
-      return jsonError('Введите корректный email адрес', 400);
-    }
-    if (!password || typeof password !== 'string' || password.length < 6) {
-      return jsonError('Пароль должен содержать не менее 6 символов', 400);
+    if (!password || typeof password !== 'string' || password.length < 4) {
+      return jsonError('Пароль должен содержать не менее 4 символов', 400);
     }
 
     const cleanUsername = username.trim();
-    const cleanEmail = email.trim().toLowerCase();
 
-    const existing = findUserByEmailOrUsername(cleanUsername) || findUserByEmailOrUsername(cleanEmail);
+    const existing = findUserByEmailOrUsername(cleanUsername);
     if (existing) {
-      return jsonError('Пользователь с таким логином или email уже существует', 409);
+      return jsonError('Пользователь с таким логином уже существует', 409);
     }
 
     const { hash, salt } = hashPassword(password);
@@ -34,7 +30,7 @@ export async function POST(req: NextRequest) {
     const newUser: UserRecord = {
       id: userId,
       username: cleanUsername,
-      email: cleanEmail,
+      email: '',
       passwordHash: hash,
       salt,
       avatar,
@@ -47,10 +43,21 @@ export async function POST(req: NextRequest) {
 
     saveUser(newUser);
 
-    const token = createToken(userId);
+    const token = createToken(newUser);
     const publicUser = toPublicUser(newUser);
 
-    const res = jsonOk({ user: publicUser, token });
+    const backup = {
+      id: newUser.id,
+      username: newUser.username,
+      passwordHash: newUser.passwordHash,
+      salt: newUser.salt,
+      avatar: newUser.avatar,
+      bio: newUser.bio,
+      exp: newUser.exp,
+      createdAt: newUser.createdAt,
+    };
+
+    const res = jsonOk({ user: publicUser, token, backup });
     res.cookies.set('mr_token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',

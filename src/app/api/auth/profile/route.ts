@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { jsonError, jsonOk } from '@/lib/api';
-import { getUserFromRequest, toPublicUser } from '@/lib/server/auth';
+import { createToken, getUserFromRequest, toPublicUser } from '@/lib/server/auth';
 import { findUserByEmailOrUsername, saveUser } from '@/lib/server/db';
 
 export async function PATCH(req: NextRequest) {
@@ -32,7 +32,28 @@ export async function PATCH(req: NextRequest) {
     }
 
     saveUser(user);
-    return jsonOk({ user: toPublicUser(user) });
+    const token = createToken(user);
+    const publicUser = toPublicUser(user);
+    const backup = {
+      id: user.id,
+      username: user.username,
+      passwordHash: user.passwordHash,
+      salt: user.salt,
+      avatar: user.avatar,
+      bio: user.bio,
+      exp: user.exp,
+      createdAt: user.createdAt,
+    };
+
+    const res = jsonOk({ user: publicUser, token, backup });
+    res.cookies.set('mr_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 30 * 24 * 3600,
+      path: '/',
+    });
+    return res;
   } catch (err) {
     return jsonError(err);
   }
