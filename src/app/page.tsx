@@ -3,10 +3,11 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MangaCard, { MangaCardSkeleton } from '@/components/MangaCard';
-import { IconClock, IconPlay, IconSearch, IconSparkle } from '@/components/Icons';
+import { IconFilter, IconPlay, IconSearch, IconSparkle } from '@/components/Icons';
+import { MangaLibSidebar, MangaLibSortDropdown } from '@/components/catalog/MangaLibFilters';
 import { SOURCE_LABELS } from '@/lib/labels';
-import { getAllProgress, getReaderSettings, saveReaderSettings } from '@/lib/storage';
-import { SManga, SortMode, SourceMeta } from '@/lib/types';
+import { getAllProgress, getLibraryItems, getReaderSettings, saveReaderSettings } from '@/lib/storage';
+import { CatalogFilters, LibraryItem, SManga, SortMode, SortOrder, SourceMeta } from '@/lib/types';
 import { useStored } from '@/lib/useStored';
 
 interface BrowseResponse {
@@ -30,6 +31,7 @@ const DEFAULT_SOURCES: SourceMeta[] = [
   { id: 'all', name: 'Все источники', lang: 'ru', baseUrl: '', isOnline: true, supportsSearch: true },
   { id: 'mangalib', name: 'MangaLib', lang: 'ru', baseUrl: '', isOnline: true, supportsSearch: true },
   { id: 'remanga', name: 'ReManga', lang: 'ru', baseUrl: '', isOnline: true, supportsSearch: true },
+  { id: 'mangabuff', name: 'MangaBuff', lang: 'ru', baseUrl: '', isOnline: true, supportsSearch: true },
   { id: 'mangamir', name: 'MangaMir', lang: 'ru', baseUrl: '', isOnline: true, supportsSearch: true },
   { id: 'mangadex', name: 'MangaDex', lang: 'ru/en', baseUrl: '', isOnline: true, supportsSearch: true },
 ];
@@ -44,11 +46,39 @@ const ADULT_SOURCE: SourceMeta = {
 };
 
 const EMPTY_PROGRESS = {};
+const EMPTY_LIBRARY: LibraryItem[] = [];
 const getShowAdult = () => getReaderSettings().showAdult;
 
-async function fetchPage(source: string, sort: SortMode, q: string, page: number, adult: boolean) {
-  const qs = new URLSearchParams({ source, sort, q, page: String(page) });
+async function fetchPage(
+  source: string,
+  sort: SortMode,
+  sortOrder: SortOrder,
+  q: string,
+  page: number,
+  adult: boolean,
+  filters: CatalogFilters,
+) {
+  const qs = new URLSearchParams({
+    source,
+    sort,
+    sortOrder,
+    q,
+    page: String(page),
+  });
   if (adult) qs.set('adult', '1');
+  if (filters.types?.length) qs.set('types', filters.types.join(','));
+  if (filters.formats?.length) qs.set('formats', filters.formats.join(','));
+  if (filters.status?.length) qs.set('status', filters.status.join(','));
+  if (filters.ageRatings?.length) qs.set('ageRatings', filters.ageRatings.join(','));
+  if (filters.genres?.length) qs.set('genres', filters.genres.join(','));
+  if (filters.tags?.length) qs.set('tags', filters.tags.join(','));
+  if (filters.minChapters !== undefined) qs.set('minChapters', String(filters.minChapters));
+  if (filters.maxChapters !== undefined) qs.set('maxChapters', String(filters.maxChapters));
+  if (filters.minRating !== undefined) qs.set('minRating', String(filters.minRating));
+  if (filters.maxRating !== undefined) qs.set('maxRating', String(filters.maxRating));
+  if (filters.minYear !== undefined) qs.set('minYear', String(filters.minYear));
+  if (filters.maxYear !== undefined) qs.set('maxYear', String(filters.maxYear));
+
   const res = await fetch(`/api/manga/browse?${qs}`);
   const json = await res.json().catch(() => ({ success: false, error: `HTTP ${res.status}` }));
   if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`);
@@ -58,6 +88,8 @@ async function fetchPage(source: string, sort: SortMode, q: string, page: number
 export default function HomePage() {
   const showAdult = useStored(getShowAdult, false);
   const progressMap = useStored(getAllProgress, EMPTY_PROGRESS as ReturnType<typeof getAllProgress>);
+  const libraryItems = useStored(getLibraryItems, EMPTY_LIBRARY);
+
   const history = useMemo(
     () =>
       Object.values(progressMap)
@@ -66,23 +98,53 @@ export default function HomePage() {
     [progressMap],
   );
 
+  const userListMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const item of libraryItems) {
+      if (item?.manga?.id && item.status) {
+        map[item.manga.id] = item.status;
+      }
+    }
+    return map;
+  }, [libraryItems]);
+
   const [source, setSource] = useState('all');
   const [sort, setSort] = useState<SortMode>('popular');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [input, setInput] = useState('');
   const [query, setQuery] = useState('');
+  const [filters, setFilters] = useState<CatalogFilters>({});
+  const [appliedFilters, setAppliedFilters] = useState<CatalogFilters>({});
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setQuery(input.trim()), 400);
     return () => clearTimeout(t);
   }, [input]);
 
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (appliedFilters.genres?.length) count += appliedFilters.genres.length;
+    if (appliedFilters.tags?.length) count += appliedFilters.tags.length;
+    if (appliedFilters.types?.length) count += appliedFilters.types.length;
+    if (appliedFilters.formats?.length) count += appliedFilters.formats.length;
+    if (appliedFilters.status?.length) count += appliedFilters.status.length;
+    if (appliedFilters.ageRatings?.length) count += appliedFilters.ageRatings.length;
+    if (appliedFilters.myLists?.length) count += appliedFilters.myLists.length;
+    if (appliedFilters.minChapters !== undefined || appliedFilters.maxChapters !== undefined) count += 1;
+    if (appliedFilters.minRating !== undefined || appliedFilters.maxRating !== undefined) count += 1;
+    if (appliedFilters.minYear !== undefined || appliedFilters.maxYear !== undefined) count += 1;
+    return count;
+  }, [appliedFilters]);
+
   const effectiveSource = !showAdult && source === 'manga18fx' ? 'all' : source;
-  const key = `${effectiveSource}|${sort}|${query}|${showAdult ? 1 : 0}`;
+  const filterKey = useMemo(() => JSON.stringify(appliedFilters), [appliedFilters]);
+  const key = `${effectiveSource}|${sort}|${sortOrder}|${query}|${showAdult ? 1 : 0}|${filterKey}`;
   const [state, setState] = useState<CatalogState | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    fetchPage(effectiveSource, sort, query, 1, showAdult)
+    fetchPage(effectiveSource, sort, sortOrder, query, 1, showAdult, appliedFilters)
       .then(r => {
         if (cancelled) return;
         setState({
@@ -102,16 +164,27 @@ export default function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, [key, effectiveSource, sort, query, showAdult]);
+  }, [key, effectiveSource, sort, sortOrder, query, showAdult, appliedFilters]);
 
   const current = state && state.key === key ? state : null;
   const loading = !current;
+
+  const displayedItems = useMemo(() => {
+    if (!current) return [];
+    if (!appliedFilters.myLists || appliedFilters.myLists.length === 0) {
+      return current.items;
+    }
+    return current.items.filter(m => {
+      const st = userListMap[m.id];
+      return st && appliedFilters.myLists?.includes(st);
+    });
+  }, [current, appliedFilters.myLists, userListMap]);
 
   const loadMore = useCallback(() => {
     if (!current || !current.hasNext || current.loadingMore) return;
     const nextPage = current.page + 1;
     setState(s => (s && s.key === key ? { ...s, loadingMore: true } : s));
-    fetchPage(effectiveSource, sort, query, nextPage, showAdult)
+    fetchPage(effectiveSource, sort, sortOrder, query, nextPage, showAdult, appliedFilters)
       .then(r =>
         setState(s => {
           if (!s || s.key !== key) return s;
@@ -126,7 +199,7 @@ export default function HomePage() {
         }),
       )
       .catch(() => setState(s => (s && s.key === key ? { ...s, loadingMore: false, hasNext: false } : s)));
-  }, [current, key, effectiveSource, sort, query, showAdult]);
+  }, [current, key, effectiveSource, sort, sortOrder, query, showAdult, appliedFilters]);
 
   const sentinel = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -142,13 +215,27 @@ export default function HomePage() {
     saveReaderSettings({ showAdult: !showAdult });
   };
 
+  const handleApplyFilters = useCallback(() => {
+    setAppliedFilters({ ...filters });
+  }, [filters]);
+
+  const handleResetFilters = useCallback(() => {
+    setFilters({});
+    setAppliedFilters({});
+    setInput('');
+    setQuery('');
+    setSort('popular');
+    setSortOrder('desc');
+    setSource('all');
+  }, []);
+
   const sources = showAdult ? [...DEFAULT_SOURCES, ADULT_SOURCE] : DEFAULT_SOURCES;
 
   return (
     <div className="container">
       <section className="hero">
         <div className="chip-wrap">
-          <span className="chip chip-accent">MangaLib · ReManga · MangaMir · MangaDex</span>
+          <span className="chip chip-accent">MangaLib · ReManga · MangaBuff · MangaMir · MangaDex</span>
           <span className="chip chip-ai">
             <IconSparkle size={13} /> Векторный AI-оверлей
           </span>
@@ -157,8 +244,8 @@ export default function HomePage() {
           Вся манхва и манга — <em>в одной читалке</em>
         </h1>
         <p>
-          Единый каталог популярных источников, библиотека со статусами, история чтения и удобная читалка: вебтун или
-          постранично, с сохранением прогресса.
+          Единый каталог популярных источников с фильтрами MangaLib, библиотекой со статусами, комментариями и удобной
+          читалкой без рекламы.
         </p>
         <div className="hero-actions">
           <a href="#catalog" className="btn btn-primary">
@@ -223,8 +310,8 @@ export default function HomePage() {
 
       <section id="catalog" style={{ scrollMarginTop: 'var(--nav-h)' }}>
         <div className="filter-panel">
-          <div className="filter-row">
-            <label className="input-icon-wrap">
+          <div className="filter-row" style={{ justifyContent: 'space-between' }}>
+            <label className="input-icon-wrap" style={{ flex: 1, minWidth: '220px' }}>
               <IconSearch />
               <input
                 type="search"
@@ -235,21 +322,32 @@ export default function HomePage() {
                 aria-label="Поиск"
               />
             </label>
-            {!query && (
-              <div className="segmented" role="tablist" aria-label="Сортировка">
-                <button className={sort === 'popular' ? 'active' : ''} onClick={() => setSort('popular')}>
-                  Популярное
-                </button>
-                <button className={sort === 'latest' ? 'active' : ''} onClick={() => setSort('latest')}>
-                  <IconClock size={13} style={{ marginRight: 4, verticalAlign: '-2px' }} />
-                  Обновления
-                </button>
-              </div>
-            )}
-            <button className={`switch ${showAdult ? 'on' : ''}`} onClick={toggleAdult} aria-pressed={showAdult}>
-              <span className="switch-track" /> 18+
-            </button>
+
+            <div className="catalog-controls-group">
+              <MangaLibSortDropdown
+                sort={sort}
+                setSort={setSort}
+                sortOrder={sortOrder}
+                setSortOrder={setSortOrder}
+              />
+
+              <button
+                type="button"
+                className={`ml-filter-trigger-btn ${activeFilterCount > 0 ? 'has-active' : ''}`}
+                onClick={() => setSidebarOpen(prev => !prev)}
+                title="Фильтры каталога"
+              >
+                <IconFilter size={15} />
+                <span>Фильтры</span>
+                {activeFilterCount > 0 && <span className="ml-filter-badge">{activeFilterCount}</span>}
+              </button>
+
+              <button className={`switch ${showAdult ? 'on' : ''}`} onClick={toggleAdult} aria-pressed={showAdult}>
+                <span className="switch-track" /> 18+
+              </button>
+            </div>
           </div>
+
           <div className="chip-row">
             {sources.map(s => (
               <button
@@ -271,52 +369,64 @@ export default function HomePage() {
           </div>
         )}
 
-        {loading ? (
-          <div className="manga-grid">
-            {Array.from({ length: 18 }, (_, i) => (
-              <MangaCardSkeleton key={i} />
-            ))}
-          </div>
-        ) : current.error ? (
-          <div className="empty-state">
-            <h3>Источник недоступен</h3>
-            <p style={{ marginBottom: '1.25rem' }}>{current.error}</p>
-            <button className="btn btn-secondary btn-sm" onClick={() => setSource('all')}>
-              Показать все источники
-            </button>
-          </div>
-        ) : current.items.length === 0 ? (
-          <div className="empty-state">
-            <h3>Ничего не найдено</h3>
-            <p style={{ marginBottom: '1.25rem' }}>Попробуйте другое название или другой источник</p>
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={() => {
-                setInput('');
-                setSource('all');
-              }}
-            >
-              Сбросить фильтры
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="manga-grid">
-              {current.items.map((m, i) => (
-                <MangaCard key={m.id} manga={m} eager={i < 12} />
-              ))}
-              {current.loadingMore && Array.from({ length: 6 }, (_, i) => <MangaCardSkeleton key={`s${i}`} />)}
-            </div>
-            <div ref={sentinel} style={{ height: 1 }} />
-            {current.hasNext && !current.loadingMore && (
-              <div style={{ textAlign: 'center', marginTop: '2rem' }}>
-                <button className="btn btn-secondary" onClick={loadMore}>
-                  Показать ещё
+        <div className="catalog-layout">
+          <div className="catalog-content">
+            {loading ? (
+              <div className="manga-grid">
+                {Array.from({ length: 18 }, (_, i) => (
+                  <MangaCardSkeleton key={i} />
+                ))}
+              </div>
+            ) : current.error ? (
+              <div className="empty-state">
+                <h3>Источник недоступен</h3>
+                <p style={{ marginBottom: '1.25rem' }}>{current.error}</p>
+                <button className="btn btn-secondary btn-sm" onClick={() => setSource('all')}>
+                  Показать все источники
                 </button>
               </div>
+            ) : displayedItems.length === 0 ? (
+              <div className="empty-state">
+                <h3>Ничего не найдено</h3>
+                <p style={{ marginBottom: '1.25rem' }}>Попробуйте другое название или сбросить фильтры</p>
+                <button className="btn btn-secondary btn-sm" onClick={handleResetFilters}>
+                  Сбросить фильтры
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="manga-grid">
+                  {displayedItems.map((m, i) => (
+                    <MangaCard
+                      key={m.id}
+                      manga={m}
+                      eager={i < 12}
+                      userListStatus={userListMap[m.id]}
+                    />
+                  ))}
+                  {current.loadingMore && Array.from({ length: 6 }, (_, i) => <MangaCardSkeleton key={`s${i}`} />)}
+                </div>
+                <div ref={sentinel} style={{ height: 1 }} />
+                {current.hasNext && !current.loadingMore && (
+                  <div style={{ textAlign: 'center', marginTop: '2rem' }}>
+                    <button className="btn btn-secondary" onClick={loadMore}>
+                      Показать ещё
+                    </button>
+                  </div>
+                )}
+              </>
             )}
-          </>
-        )}
+          </div>
+
+          <MangaLibSidebar
+            filters={filters}
+            setFilters={setFilters}
+            onApply={handleApplyFilters}
+            onReset={handleResetFilters}
+            sidebarOpen={sidebarOpen}
+            setSidebarOpen={setSidebarOpen}
+          />
+        </div>
       </section>
     </div>
   );

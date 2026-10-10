@@ -1,4 +1,4 @@
-import { MangaListResult, Page, SChapter, SManga, SortMode, SourceMeta } from '../types';
+import { MangaListResult, Page, SChapter, SManga, SortMode, SortOrder, SourceMeta } from '../types';
 import { ID_SEPARATOR, MangaSource } from './base';
 import { DEMO_SLUG, LEGACY_DEMO_IDS, demoSource } from './demo';
 import { SourceError } from './http';
@@ -74,12 +74,35 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   });
 }
 
+export function normalizeTitleKey(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[\s\-_:!?,.()'"«»—–\/\\]+/g, '')
+    .trim();
+}
+
 export interface BrowseParams {
   source?: string;
   query?: string;
   page?: number;
   sort?: SortMode;
+  sortOrder?: SortOrder;
   adult?: boolean;
+  types?: string[];
+  formats?: string[];
+  status?: string[];
+  translationStatus?: string[];
+  genres?: string[];
+  tags?: string[];
+  ageRatings?: string[];
+  minChapters?: number;
+  maxChapters?: number;
+  minYear?: number;
+  maxYear?: number;
+  minRating?: number;
+  maxRating?: number;
+  removeEmptyChapters?: boolean;
+  deduplicate?: boolean;
 }
 
 export interface BrowseResult extends MangaListResult {
@@ -91,7 +114,21 @@ export async function browse({
   query = '',
   page = 1,
   sort = 'popular',
+  sortOrder = 'desc',
   adult = false,
+  types,
+  status,
+  ageRatings,
+  genres,
+  tags,
+  minChapters,
+  maxChapters,
+  minYear,
+  maxYear,
+  minRating,
+  maxRating,
+  removeEmptyChapters = true,
+  deduplicate = true,
 }: BrowseParams): Promise<BrowseResult> {
   const q = query.trim();
   const targets =
@@ -124,17 +161,121 @@ export async function browse({
     }
   });
 
-  // Round-robin merge so one source doesn't dominate the first screen.
-  const items: SManga[] = [];
-  const seen = new Set<string>();
+  // Round-robin merge, deduplicate identical titles, and exclude titles with zero chapters
+  let items: SManga[] = [];
+  const seenId = new Set<string>();
+  const seenTitleMap = new Map<string, number>();
+
   for (let i = 0; lists.some(l => i < l.length); i++) {
     for (const l of lists) {
       const m = l[i];
-      if (m && !seen.has(m.id)) {
-        seen.add(m.id);
-        items.push(m);
+      if (!m || seenId.has(m.id)) continue;
+
+      // Filter out zero-chapter titles if known
+      if (removeEmptyChapters && m.totalChapters === 0) {
+        continue;
       }
+
+      seenId.add(m.id);
+
+      const normTitle = normalizeTitleKey(m.title);
+      if (deduplicate && normTitle.length >= 2) {
+        const existingIdx = seenTitleMap.get(normTitle);
+        if (existingIdx !== undefined) {
+          const existing = items[existingIdx];
+          const existingCh = existing.totalChapters ?? 0;
+          const newCh = m.totalChapters ?? 0;
+          // If existing had 0 chapters and new one has chapters, replace it!
+          if (existingCh === 0 && newCh > 0) {
+            items[existingIdx] = m;
+          } else if (newCh > existingCh && m.rating >= (existing.rating || 0)) {
+            items[existingIdx] = m;
+          }
+          continue; // skip duplicate
+        }
+        seenTitleMap.set(normTitle, items.length);
+      }
+
+      items.push(m);
     }
+  }
+
+  // Filter by Type (Манхва, Манга, Маньхуа, Руманга, etc.)
+  if (types && types.length > 0) {
+    const lowerTypes = types.map(t => t.toLowerCase());
+    items = items.filter(m => {
+      const mt = (m.type || '').toLowerCase();
+      return lowerTypes.some(t => mt.includes(t) || t.includes(mt));
+    });
+  }
+
+  // Filter by Status (ONGOING, COMPLETED, etc.)
+  if (status && status.length > 0) {
+    items = items.filter(m => status.includes(m.status));
+  }
+
+  // Filter by Age Rating (6+, 12+, 16+, 18+)
+  if (ageRatings && ageRatings.length > 0) {
+    items = items.filter(m => m.ageRating && ageRatings.includes(m.ageRating));
+  }
+
+  // Filter by Chapter Count
+  if (minChapters !== undefined && !Number.isNaN(minChapters)) {
+    items = items.filter(m => (m.totalChapters ?? 0) >= minChapters);
+  }
+  if (maxChapters !== undefined && !Number.isNaN(maxChapters)) {
+    items = items.filter(m => (m.totalChapters ?? 0) <= maxChapters);
+  }
+
+  // Filter by Rating (0..10)
+  if (minRating !== undefined && !Number.isNaN(minRating)) {
+    items = items.filter(m => m.rating >= minRating);
+  }
+  if (maxRating !== undefined && !Number.isNaN(maxRating)) {
+    items = items.filter(m => m.rating <= maxRating);
+  }
+
+  // Filter by Year
+  if (minYear !== undefined && !Number.isNaN(minYear)) {
+    items = items.filter(m => (m.releaseYear ?? 0) >= minYear);
+  }
+  if (maxYear !== undefined && !Number.isNaN(maxYear)) {
+    items = items.filter(m => (m.releaseYear ?? 0) <= maxYear);
+  }
+
+  // Filter by Genres
+  if (genres && genres.length > 0) {
+    const lowerGenres = genres.map(g => g.toLowerCase());
+    items = items.filter(m =>
+      lowerGenres.every(g => m.genres.some(mg => mg.toLowerCase().includes(g))),
+    );
+  }
+
+  // Filter by Tags
+  if (tags && tags.length > 0) {
+    const lowerTags = tags.map(t => t.toLowerCase());
+    items = items.filter(m =>
+      lowerTags.some(t => m.genres.some(mg => mg.toLowerCase().includes(t))),
+    );
+  }
+
+  // Sorting
+  if (sort === 'rating') {
+    items.sort((a, b) => b.rating - a.rating);
+  } else if (sort === 'chapters') {
+    items.sort((a, b) => (b.totalChapters ?? 0) - (a.totalChapters ?? 0));
+  } else if (sort === 'name_asc') {
+    items.sort((a, b) => a.title.localeCompare(b.title, 'en'));
+  } else if (sort === 'name_ru_asc') {
+    items.sort((a, b) => a.title.localeCompare(b.title, 'ru'));
+  } else if (sort === 'release_date') {
+    items.sort((a, b) => (b.releaseYear ?? 0) - (a.releaseYear ?? 0));
+  }
+
+  if (sortOrder === 'asc' && (sort === 'rating' || sort === 'chapters' || sort === 'release_date')) {
+    items.reverse();
+  } else if (sortOrder === 'desc' && (sort === 'name_asc' || sort === 'name_ru_asc')) {
+    items.reverse();
   }
 
   if (errors.length === targets.length && targets.length > 0) {

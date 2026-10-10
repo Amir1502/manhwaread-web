@@ -150,8 +150,15 @@ export const mangalibSource: MangaSource = {
   imageHosts: [/(^|\.)cdnlibs\.org$/, /(^|\.)imglib\.info$/, /(^|\.)mangalib\.(me|org)$/],
 
   list(sort: SortMode, page: number) {
-    const by = sort === 'latest' ? 'last_chapter_at' : 'views';
-    return listQuery(`sort_by=${by}&sort_type=desc`, page);
+    let by = 'views';
+    let dir = 'desc';
+    if (sort === 'latest') by = 'last_chapter_at';
+    else if (sort === 'rating') by = 'rating_score';
+    else if (sort === 'views') by = 'views';
+    else if (sort === 'chapters') by = 'items_count';
+    else if (sort === 'name_asc') { by = 'name'; dir = 'asc'; }
+    else if (sort === 'name_ru_asc') { by = 'rus_name'; dir = 'asc'; }
+    return listQuery(`sort_by=${by}&sort_type=${dir}`, page);
   },
 
   search(query: string, page: number) {

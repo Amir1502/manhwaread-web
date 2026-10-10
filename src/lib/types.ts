@@ -2,7 +2,35 @@ export type ReadingStatus = 'reading' | 'planned' | 'completed' | 'dropped';
 
 export type MangaStatus = 'ONGOING' | 'COMPLETED' | 'HIATUS' | 'CANCELLED' | 'UNKNOWN';
 
-export type SortMode = 'popular' | 'latest';
+export type SortMode =
+  | 'popular'
+  | 'rating'
+  | 'views'
+  | 'chapters'
+  | 'release_date'
+  | 'latest'
+  | 'created'
+  | 'name_asc'
+  | 'name_ru_asc';
+
+export type SortOrder = 'desc' | 'asc';
+
+export interface CatalogFilters {
+  types?: string[];
+  formats?: string[];
+  status?: string[];
+  translationStatus?: string[];
+  genres?: string[];
+  tags?: string[];
+  ageRatings?: string[];
+  minChapters?: number;
+  maxChapters?: number;
+  minYear?: number;
+  maxYear?: number;
+  minRating?: number;
+  maxRating?: number;
+  myLists?: string[];
+}
 
 export interface SManga {
   /** Global id: `${sourceId}~${slug}` (legacy: `md-<uuid>` or demo slugs). */
@@ -18,9 +46,12 @@ export interface SManga {
   rating: number;
   genres: string[];
   type?: string;
+  format?: string;
   ageRating?: string;
   isAdult?: boolean;
   totalChapters?: number;
+  releaseYear?: number;
+  translationStatus?: string;
   lastUpdated?: string;
   views?: number;
   sourceUrl?: string;

@@ -158,7 +158,12 @@ export const remangaSource: MangaSource = {
   imageHosts: [/(^|\.)remanga\.org$/, /(^|\.)reimg\.org$/, /(^|\.)reimg2\.org$/, /(^|\.)remanga\.(ru|io)$/],
 
   list(sort: SortMode, page: number) {
-    return listQuery('search/catalog/', { ordering: sort === 'latest' ? '-chapter_date' : '-rating' }, page);
+    let ordering = '-rating';
+    if (sort === 'latest') ordering = '-chapter_date';
+    else if (sort === 'popular' || sort === 'views') ordering = '-votes';
+    else if (sort === 'chapters') ordering = '-count_chapters';
+    else if (sort === 'name_asc' || sort === 'name_ru_asc') ordering = 'name';
+    return listQuery('search/catalog/', { ordering }, page);
   },
 
   search(query: string, page: number) {

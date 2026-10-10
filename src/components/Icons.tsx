@@ -85,6 +85,16 @@ export const IconCheck = ({ size, ...p }: P) => (
     <path d="M20 6 9 17l-5-5" />
   </svg>
 );
+export const IconFilter = ({ size, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+  </svg>
+);
+export const IconChevronDown = ({ size, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <path d="m6 9 6 6 6-6" />
+  </svg>
+);
 export const IconSort = ({ size, ...p }: P) => (
   <svg {...base(size, p)}>
     <path d="m3 16 4 4 4-4M7 20V4M21 8l-4-4-4 4M17 4v16" />
