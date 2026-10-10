@@ -88,7 +88,7 @@ export async function GET() {
     const titleHome = tHome.match(/<title>([^<]+)<\/title>/i)?.[1] || '';
     logs.push(`3. GET / (with cookies) -> status: ${rHome.status}, title: "${titleHome}", len: ${tHome.length}`);
 
-    // 4. Request /comix-read/
+    // 4. Request /comix-read/ with normal UA
     const rCat = await fetch('https://com-x.life/comix-read/', {
       headers: {
         'User-Agent': BROWSER_UA,
@@ -99,7 +99,41 @@ export async function GET() {
     saveCookies(rCat);
     const tCat = await rCat.text();
     const titleCat = tCat.match(/<title>([^<]+)<\/title>/i)?.[1] || '';
-    logs.push(`4. GET /comix-read/ -> status: ${rCat.status}, title: "${titleCat}", len: ${tCat.length}`);
+    logs.push(`4. GET /comix-read/ (normal UA) -> status: ${rCat.status}, title: "${titleCat}", len: ${tCat.length}`);
+
+    // Experiment A: With Googlebot UA
+    const rBot = await fetch('https://com-x.life/comix-read/', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+        Cookie: cookieStr(),
+      },
+    });
+    const tBot = await rBot.text();
+    const titleBot = tBot.match(/<title>([^<]+)<\/title>/i)?.[1] || '';
+    logs.push(`4a. GET /comix-read/ (Googlebot UA) -> status: ${rBot.status}, title: "${titleBot}", len: ${tBot.length}`);
+
+    // Experiment B: With YandexBot UA
+    const rYandex = await fetch('https://com-x.life/comix-read/', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)',
+        Cookie: cookieStr(),
+      },
+    });
+    const tYandex = await rYandex.text();
+    const titleYandex = tYandex.match(/<title>([^<]+)<\/title>/i)?.[1] || '';
+    logs.push(`4b. GET /comix-read/ (YandexBot UA) -> status: ${rYandex.status}, title: "${titleYandex}", len: ${tYandex.length}`);
+
+    // Experiment C: With XMLHttpRequest header
+    const rAjax = await fetch('https://com-x.life/comix-read/', {
+      headers: {
+        'User-Agent': BROWSER_UA,
+        Cookie: cookieStr(),
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+    });
+    const tAjax = await rAjax.text();
+    const titleAjax = tAjax.match(/<title>([^<]+)<\/title>/i)?.[1] || '';
+    logs.push(`4c. GET /comix-read/ (X-Requested-With: XMLHttpRequest) -> status: ${rAjax.status}, title: "${titleAjax}", len: ${tAjax.length}`);
 
     // 5. Clean text of 401 gate
     const cleanText = tCat.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
