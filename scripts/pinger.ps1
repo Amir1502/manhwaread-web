@@ -1,11 +1,11 @@
-# ManhwaRead Windows Auto-Pinger
+# Tsundoku Windows Auto-Pinger
 param(
-    [string]$Url = "https://manhwaread-web-9zyh.onrender.com/",
+    [string]$Url = "https://tsundoku-web.onrender.com/",
     [int]$IntervalMinutes = 5
 )
 
 Write-Host "=======================================================" -ForegroundColor Cyan
-Write-Host "🚀 ManhwaRead Auto-Pinger (PowerShell)" -ForegroundColor Green
+Write-Host "🚀 Tsundoku Auto-Pinger (PowerShell)" -ForegroundColor Green
 Write-Host "🎯 URL:       $Url" -ForegroundColor White
 Write-Host "⏰ Интервал:  каждые $IntervalMinutes мин." -ForegroundColor White
 Write-Host "=======================================================" -ForegroundColor Cyan

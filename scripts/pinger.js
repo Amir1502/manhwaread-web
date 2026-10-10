@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 
 /**
- * ManhwaRead Auto-Pinger
+ * Tsundoku Auto-Pinger
  * Keeps Render.com free instance awake by sending periodic HTTP requests.
  */
 
 const https = require('https');
 const http = require('http');
 
-const TARGET_URL = process.env.PING_URL || process.argv[2] || 'https://manhwaread-web-9zyh.onrender.com/';
+const TARGET_URL = process.env.PING_URL || process.argv[2] || 'https://tsundoku-web.onrender.com/';
 const INTERVAL_MIN = Math.max(1, parseInt(process.env.PING_INTERVAL_MINUTES || '5', 10));
 const INTERVAL_MS = INTERVAL_MIN * 60 * 1000;
 
@@ -66,7 +66,7 @@ function ping() {
 }
 
 console.log('='.repeat(55));
-console.log('🚀 ManhwaRead Auto-Pinger запущен');
+console.log('🚀 Tsundoku Auto-Pinger запущен');
 console.log(`🎯 Целевой URL:   ${TARGET_URL}`);
 console.log(`⏰ Интервал:      каждые ${INTERVAL_MIN} минут`);
 console.log('='.repeat(55));

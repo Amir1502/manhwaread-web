@@ -10,7 +10,7 @@
 
 **Современная веб-читалка манхвы, манги, маньхуа и литературы с единым каталогом, фильтрами в стиле MangaLib, комментариями и системой аккаунтов.**
 
-[🚀 Открыть онлайн на Render](https://manhwaread-web-9zyh.onrender.com/) • [✨ Демо AI-оверлея](https://manhwaread-web-9zyh.onrender.com/read/demo~ai-overlay/ch-1)
+[🚀 Открыть онлайн на Render](https://tsundoku-web.onrender.com/) • [✨ Демо AI-оверлея](https://tsundoku-web.onrender.com/read/demo~ai-overlay/ch-1)
 
 </div>
 

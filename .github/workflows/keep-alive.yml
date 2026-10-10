@@ -11,12 +11,12 @@ on:
 
 jobs:
   ping:
-    name: Ping ManhwaRead on Render
+    name: Ping Tsundoku on Render
     runs-on: ubuntu-latest
     steps:
       - name: Ping Service
         run: |
-          URL="https://manhwaread-web-9zyh.onrender.com/"
+          URL="https://tsundoku-web.onrender.com/"
           echo "Pinging $URL at $(date -u)"
           
           # Retry up to 3 times in case Render is waking up
