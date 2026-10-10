@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   parseComxCatalog,
+  parseComxRss,
   parseComxDetails,
   parseComxChapters,
   parseComxPages,
@@ -168,6 +169,28 @@ test('Com-X parser', async (t) => {
     assert.ok(pages[0].imageUrl.includes('img.com-x.life%2Fcomix%2F9117%2F1001%2Fp1.webp'));
   });
 
+  await t.test('parses RSS feed as catalog fallback', () => {
+    const mockRss = `
+    <rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+      <channel>
+        <item>
+          <title>Унылые будни Юуко</title>
+          <link>https://com-x.life/34079-unylye-budni-juuko.html</link>
+          <description><![CDATA[Описание комикса]]></description>
+          <category><![CDATA[Разные комиксы]]></category>
+          <media:content url="https://rus.com-x.life/uploads/posts/2026-10/001_png_res.jpg" type="image/jpeg"/>
+        </item>
+      </channel>
+    </rss>`;
+    const result = parseComxRss(mockRss);
+    assert.equal(result.items.length, 1);
+    assert.equal(result.items[0].id, 'comx~34079-unylye-budni-juuko');
+    assert.equal(result.items[0].title, 'Унылые будни Юуко');
+    assert.deepEqual(result.items[0].genres, ['Разные комиксы']);
+    assert.ok(result.items[0].coverUrl.includes('rus.com-x.life%2Fuploads%2Fposts%2F2026-10%2F001_png_res.jpg'));
+    assert.equal(result.hasNextPage, false);
+  });
+
   await t.test('registers allowed image hosts for Com-X', () => {
     assert.ok(comxSource.imageHosts.some(re => re.test('com-x.life')));
     assert.ok(comxSource.imageHosts.some(re => re.test('rus.com-x.life')));
@@ -175,3 +198,4 @@ test('Com-X parser', async (t) => {
     assert.ok(!comxSource.imageHosts.some(re => re.test('other-site.com')));
   });
 });
+

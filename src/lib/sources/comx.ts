@@ -42,6 +42,15 @@ class ComxClient {
   private cookies = new Map<string, string>([['cx_imghost', 'rus']]);
   private solvingPromise: Promise<void> | null = null;
 
+  constructor() {
+    if (typeof process !== 'undefined' && process.env?.COMX_COOKIES) {
+      for (const pair of process.env.COMX_COOKIES.split(';')) {
+        const [k, v] = pair.trim().split('=');
+        if (k && v) this.cookies.set(k.trim(), v.trim());
+      }
+    }
+  }
+
   private cookieString(): string {
     return Array.from(this.cookies.entries())
       .map(([k, v]) => `${k}=${v}`)
@@ -213,6 +222,12 @@ class ComxClient {
       const title = text.match(/<title>([^<]+)<\/title>/i)?.[1] || 'no title';
       const bodySnippet = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300);
       console.error(`[comx] Request failed: HTTP ${res.status} | Title: "${title}" | Text: "${bodySnippet}"`);
+      if (res.status === 401 || text.includes('Com-X gate') || text.includes('«Реплика»')) {
+        throw new SourceError(
+          'Com-X.life: доступ ограничен для серверов за пределами РФ (гейт «Реплика»). Укажите COMX_COOKIES в переменных окружения.',
+          401
+        );
+      }
       throw new SourceError(`HTTP ${res.status} for ${new URL(url).host}: ${title}`, res.status);
     }
     return text;
@@ -220,6 +235,58 @@ class ComxClient {
 }
 
 const client = new ComxClient();
+
+export function parseComxRss(xml: string, $in?: CheerioAPI): MangaListResult {
+  const $ = $in || cheerio.load(xml, { xmlMode: true });
+  const items: SManga[] = [];
+  const seen = new Set<string>();
+
+  $('item').each((_, el) => {
+    const item = $(el);
+    const link = item.find('link').text() || item.find('guid').text() || '';
+    const slug = extractSlug(link);
+    if (!slug || seen.has(slug)) return;
+    seen.add(slug);
+
+    const rawTitle = cleanText(item.find('title').text()) || slug;
+    let title = rawTitle;
+    let altTitle: string | undefined;
+    if (rawTitle.includes(' / ')) {
+      const parts = rawTitle.split(/\s+\/\s+/);
+      title = parts[parts.length - 1] || parts[0];
+      altTitle = parts[0];
+    }
+
+    const mediaUrl = item.find('media\\:content, content').attr('url');
+    let coverUrl = mediaUrl || '';
+    if (!coverUrl) {
+      const descHtml = item.find('description').text() || item.find('content\\:encoded').text();
+      const imgMatch = descHtml.match(/<img[^>]+src=["']([^"']+)["']/i);
+      if (imgMatch) coverUrl = imgMatch[1];
+    }
+
+    const rawDesc = item.find('description').text() || '';
+    const desc = cleanText(rawDesc.replace(/<[^>]+>/g, ' '));
+    const cat = cleanText(item.find('category').text());
+    const genres = cat ? [cat] : [];
+
+    items.push({
+      id: makeMangaId('comx', slug),
+      sourceId: 'comx',
+      title,
+      altTitle,
+      description: desc,
+      coverUrl: proxied(coverUrl, 'comx'),
+      authors: [],
+      status: 'UNKNOWN',
+      rating: 0,
+      genres,
+      sourceUrl: link || `${COMX_BASE}/${slug}.html`,
+    });
+  });
+
+  return { items, hasNextPage: false };
+}
 
 export function parseComxCatalog(html: string, $in?: CheerioAPI): MangaListResult {
   const $ = $in || cheerio.load(html);
@@ -552,12 +619,30 @@ export const comxSource: MangaSource = {
 
   list(sort: SortMode, page: number) {
     return cached(`comx:list:${sort}:${page}`, 3 * 60_000, async () => {
-      const path =
-        sort === 'popular'
-          ? (page === 1 ? '/watched/' : `/watched/page/${page}/`)
-          : (page === 1 ? '/comix-read/' : `/comix-read/page/${page}/`);
-      const html = await client.fetchHtml(`${COMX_BASE}${path}`);
-      return parseComxCatalog(html);
+      try {
+        const path =
+          sort === 'popular'
+            ? (page === 1 ? '/watched/' : `/watched/page/${page}/`)
+            : (page === 1 ? '/comix-read/' : `/comix-read/page/${page}/`);
+        const html = await client.fetchHtml(`${COMX_BASE}${path}`);
+        return parseComxCatalog(html);
+      } catch (err: any) {
+        if (err?.statusCode === 401 && page === 1) {
+          console.warn('[comx] 401 gate on catalog, falling back to rss.xml...');
+          try {
+            const rssRes = await fetch(`${COMX_BASE}/rss.xml`, {
+              headers: { 'User-Agent': BROWSER_UA },
+            });
+            if (rssRes.ok) {
+              const xml = await rssRes.text();
+              return parseComxRss(xml);
+            }
+          } catch (rssErr) {
+            console.error('[comx] rss fallback failed:', rssErr);
+          }
+        }
+        throw err;
+      }
     });
   },
 
