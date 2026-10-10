@@ -123,19 +123,24 @@ export async function GET() {
     const titleYandex = tYandex.match(/<title>([^<]+)<\/title>/i)?.[1] || '';
     logs.push(`4b. GET /comix-read/ (YandexBot UA) -> status: ${rYandex.status}, title: "${titleYandex}", len: ${tYandex.length}`);
 
-    // Extract first 3 links from catalog
-    const cardLinks = Array.from(tYandex.matchAll(/href=["'](\/(?:[0-9]+-[^"']+\.html))["']/gi)).map(m => m[1]);
-    const firstLink = cardLinks[0] || '';
-    logs.push(`5a. First catalog links: ${cardLinks.slice(0, 3).join(', ')}`);
+    // Find real comic cards
+    const readedMatches = Array.from(tYandex.matchAll(/class=["'][^"']*readed[^"']*["'][\s\S]*?href=["'](\/[^"']+\.html)["']/gi)).map(m => m[1]);
+    const posterMatches = Array.from(tYandex.matchAll(/class=["'][^"']*poster[^"']*["'][\s\S]*?href=["'](\/[^"']+\.html)["']/gi)).map(m => m[1]);
+    const allHtmlLinks = Array.from(tYandex.matchAll(/href=["'](\/[^"']+\.html)["']/gi)).map(m => m[1]);
 
+    logs.push(`5a. readed cards (${readedMatches.length}): ${readedMatches.slice(0, 3).join(', ')}`);
+    logs.push(`5b. poster cards (${posterMatches.length}): ${posterMatches.slice(0, 3).join(', ')}`);
+    logs.push(`5c. total .html links: ${allHtmlLinks.length}`);
+
+    const realLink = readedMatches[0] || posterMatches[0] || allHtmlLinks.find(l => !l.includes('rising-quiver') && !l.includes('relic') && !l.includes('honeypot'));
     let tDetails = '';
     let hasData = false;
     let readerUrl = '';
     let tReader = '';
     let imagesMatch: RegExpMatchArray | null = null;
 
-    if (firstLink) {
-      const rDetails = await fetch(`https://com-x.life${firstLink}`, {
+    if (realLink) {
+      const rDetails = await fetch(`https://com-x.life${realLink}`, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)',
           Cookie: cookieStr(),
@@ -143,7 +148,7 @@ export async function GET() {
       });
       tDetails = await rDetails.text();
       hasData = tDetails.includes('window.__DATA__');
-      logs.push(`5b. GET details ${firstLink} -> status: ${rDetails.status}, len: ${tDetails.length}, has__DATA__: ${hasData}`);
+      logs.push(`5d. GET details ${realLink} -> status: ${rDetails.status}, len: ${tDetails.length}, has__DATA__: ${hasData}`);
 
       const readerMatch = tDetails.match(/href=["'](\/reader\/[^"']+)["']/);
       readerUrl = readerMatch?.[1] || '';
