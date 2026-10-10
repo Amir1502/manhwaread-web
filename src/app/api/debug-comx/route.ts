@@ -123,49 +123,33 @@ export async function GET() {
     const titleYandex = tYandex.match(/<title>([^<]+)<\/title>/i)?.[1] || '';
     logs.push(`4b. GET /comix-read/ (YandexBot UA) -> status: ${rYandex.status}, title: "${titleYandex}", len: ${tYandex.length}`);
 
-    // Experiment C: With XMLHttpRequest header
-    const rAjax = await fetch('https://com-x.life/comix-read/', {
+    // Experiment: Test details and reader with YandexBot UA
+    const rDetails = await fetch('https://com-x.life/34078-ja-pozhertvoval-lapshu-s-kimchi-v-chate-bogov.html', {
       headers: {
-        'User-Agent': BROWSER_UA,
+        'User-Agent': 'Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)',
         Cookie: cookieStr(),
-        'X-Requested-With': 'XMLHttpRequest',
       },
     });
-    const tAjax = await rAjax.text();
-    const titleAjax = tAjax.match(/<title>([^<]+)<\/title>/i)?.[1] || '';
-    logs.push(`4c. GET /comix-read/ (X-Requested-With: XMLHttpRequest) -> status: ${rAjax.status}, title: "${titleAjax}", len: ${tAjax.length}`);
+    const tDetails = await rDetails.text();
+    const hasData = tDetails.includes('window.__DATA__');
+    logs.push(`5. GET details -> status: ${rDetails.status}, len: ${tDetails.length}, has__DATA__: ${hasData}`);
 
-    // 5. Clean text of 401 gate
-    const cleanText = tCat.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    // Check rss
-    let rssStatus = 0;
-    let rssItemsCount = 0;
-    try {
-      const rRss = await fetch('https://com-x.life/rss.xml', {
-        headers: { 'User-Agent': BROWSER_UA },
-      });
-      rssStatus = rRss.status;
-      const tRss = await rRss.text();
-      rssItemsCount = (tRss.match(/<item>/g) || []).length;
-    } catch (e: any) {
-      // ignore
-    }
-
-    // Extract forms / inputs from gate
-    const forms = Array.from(tCat.matchAll(/<form[^>]*>[\s\S]*?<\/form>/gi)).map(m => m[0].slice(0, 500));
+    // Test reader
+    const rReader = await fetch('https://com-x.life/reader/34079/first', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)',
+        Cookie: cookieStr(),
+      },
+    });
+    const tReader = await rReader.text();
+    const hasReaderData = tReader.includes('window.__DATA__');
+    const imagesMatch = tReader.match(/"images":\s*(\[[^\]]+\])/);
+    logs.push(`6. GET reader -> status: ${rReader.status}, len: ${tReader.length}, has__DATA__: ${hasReaderData}, hasImages: ${Boolean(imagesMatch)}`);
 
     return NextResponse.json({
       logs,
-      cookies: Array.from(cookieMap.entries()),
-      gateMessage: cleanText.slice(0, 1000),
-      forms,
-      rssStatus,
-      rssItemsCount,
+      detailsSnippet: tDetails.slice(0, 500),
+      imagesSnippet: imagesMatch?.[1]?.slice(0, 300),
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message, stack: err.stack, logs }, { status: 500 });
