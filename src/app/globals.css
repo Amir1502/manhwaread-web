@@ -581,15 +581,11 @@ button.chip:hover {
 }
 
 .filter-panel {
-  position: sticky;
-  top: var(--nav-h);
-  z-index: 20;
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
   padding: 0.9rem 0;
   margin-bottom: 1.25rem;
-  background: linear-gradient(var(--bg-root) 80%, transparent);
 }
 
 .filter-row {
@@ -2598,6 +2594,12 @@ button.chip:hover {
   color: #f37021;
 }
 
+.ml-filter-trigger-btn.is-open {
+  border-color: #f37021;
+  background: rgba(243, 112, 33, 0.12);
+  color: #f37021;
+}
+
 .ml-filter-badge {
   display: inline-flex;
   align-items: center;
@@ -2622,6 +2624,13 @@ button.chip:hover {
   z-index: 110;
 }
 
+/* Strictly hide backdrop on desktop */
+@media (min-width: 1024px) {
+  .ml-sidebar-backdrop {
+    display: none !important;
+  }
+}
+
 .ml-filters-sidebar {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
@@ -2634,15 +2643,20 @@ button.chip:hover {
 /* Desktop: sticky inline sidebar */
 @media (min-width: 1024px) {
   .ml-filters-sidebar {
+    display: none;
     width: 290px;
     flex-shrink: 0;
     position: sticky;
-    top: calc(var(--nav-h) + 12px);
-    max-height: calc(100vh - var(--nav-h) - 24px);
+    top: calc(var(--nav-h) + 16px);
+    height: calc(100vh - var(--nav-h) - 32px);
+    max-height: calc(100vh - var(--nav-h) - 32px);
     overflow: hidden;
   }
+  .ml-filters-sidebar.open {
+    display: flex;
+  }
   .ml-filters-close {
-    display: none;
+    display: inline-flex;
   }
 }
 
@@ -2676,6 +2690,7 @@ button.chip:hover {
   padding-bottom: 0.8rem;
   border-bottom: 1px solid var(--border-subtle);
   margin-bottom: 0.9rem;
+  flex-shrink: 0;
 }
 
 .ml-filters-header h3 {
@@ -2693,6 +2708,7 @@ button.chip:hover {
   border-radius: 8px;
   color: var(--text-muted);
   transition: background 0.15s, color 0.15s;
+  cursor: pointer;
 }
 
 .ml-filters-close:hover {
@@ -2702,11 +2718,25 @@ button.chip:hover {
 
 .ml-filters-body {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding-right: 4px;
+  padding-right: 6px;
   display: flex;
   flex-direction: column;
   gap: 1.2rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.ml-filters-body::-webkit-scrollbar {
+  width: 5px;
+}
+.ml-filters-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+.ml-filters-body::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .ml-filter-group {
@@ -2729,7 +2759,20 @@ button.chip:hover {
   gap: 6px;
   max-height: 160px;
   overflow-y: auto;
-  padding-right: 2px;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.ml-chips-wrap::-webkit-scrollbar {
+  width: 4px;
+}
+.ml-chips-wrap::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+.ml-chips-wrap::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .ml-filter-chip {
@@ -2845,6 +2888,7 @@ button.chip:hover {
   padding-top: 0.9rem;
   margin-top: 0.9rem;
   border-top: 1px solid var(--border-subtle);
+  flex-shrink: 0;
 }
 
 .ml-reset-btn {

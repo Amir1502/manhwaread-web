@@ -492,7 +492,7 @@ export function MangaLibSidebar({
             className="btn btn-primary ml-apply-btn"
             onClick={() => {
               onApply();
-              if (window.innerWidth < 1024) {
+              if (typeof window !== 'undefined' && window.innerWidth < 1024) {
                 setSidebarOpen(false);
               }
             }}

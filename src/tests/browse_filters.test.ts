@@ -197,4 +197,27 @@ describe('Catalog Filters & Deduplication', () => {
     const shonen = list.filter(m => m.genres.includes('Сёнен'));
     assert.strictEqual(shonen.length, 2);
   });
+
+  it('determines whether error notice banner should be displayed', () => {
+    const shouldShowNotice = (
+      hasErrors: boolean,
+      effectiveSource: string,
+      itemCount: number,
+    ) => {
+      return hasErrors && (effectiveSource !== 'all' || itemCount === 0);
+    };
+
+    // When browsing 'all' and 4 sources returned 20 items, but MangaBuff failed: do NOT show banner
+    assert.strictEqual(shouldShowNotice(true, 'all', 20), false);
+
+    // When browsing 'all' and ALL sources failed (0 items): SHOW banner
+    assert.strictEqual(shouldShowNotice(true, 'all', 0), true);
+
+    // When explicitly browsing 'mangabuff' and it failed: SHOW banner
+    assert.strictEqual(shouldShowNotice(true, 'mangabuff', 0), true);
+
+    // When no errors occurred: do NOT show banner
+    assert.strictEqual(shouldShowNotice(false, 'all', 20), false);
+  });
 });
+

@@ -333,7 +333,7 @@ export default function HomePage() {
 
               <button
                 type="button"
-                className={`ml-filter-trigger-btn ${activeFilterCount > 0 ? 'has-active' : ''}`}
+                className={`ml-filter-trigger-btn ${sidebarOpen ? 'is-open' : ''} ${activeFilterCount > 0 ? 'has-active' : ''}`}
                 onClick={() => setSidebarOpen(prev => !prev)}
                 title="Фильтры каталога"
               >
@@ -362,7 +362,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        {current && current.errors.length > 0 && (
+        {current && current.errors.length > 0 && (effectiveSource !== 'all' || displayedItems.length === 0) && (
           <div className="notice">
             Не ответили источники: {current.errors.map(e => SOURCE_LABELS[e.source] || e.source).join(', ')}. Показаны
             результаты остальных.
