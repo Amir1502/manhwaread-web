@@ -1,7 +1,7 @@
 # ManhwaRead Windows Auto-Pinger
 param(
-    [string]$Url = "https://manhwaread-web.onrender.com/api/health",
-    [int]$IntervalMinutes = 10
+    [string]$Url = "https://manhwaread-web-9zyh.onrender.com/",
+    [int]$IntervalMinutes = 5
 )
 
 Write-Host "=======================================================" -ForegroundColor Cyan

@@ -16,7 +16,7 @@ jobs:
     steps:
       - name: Ping Service
         run: |
-          URL="https://manhwaread-web.onrender.com/"
+          URL="https://manhwaread-web-9zyh.onrender.com/"
           echo "Pinging $URL at $(date -u)"
           
           # Retry up to 3 times in case Render is waking up

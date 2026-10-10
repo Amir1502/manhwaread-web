@@ -8,8 +8,8 @@
 const https = require('https');
 const http = require('http');
 
-const TARGET_URL = process.env.PING_URL || process.argv[2] || 'https://manhwaread-web.onrender.com/api/health';
-const INTERVAL_MIN = Math.max(1, parseInt(process.env.PING_INTERVAL_MINUTES || '10', 10));
+const TARGET_URL = process.env.PING_URL || process.argv[2] || 'https://manhwaread-web-9zyh.onrender.com/';
+const INTERVAL_MIN = Math.max(1, parseInt(process.env.PING_INTERVAL_MINUTES || '5', 10));
 const INTERVAL_MS = INTERVAL_MIN * 60 * 1000;
 
 let pingCount = 0;
