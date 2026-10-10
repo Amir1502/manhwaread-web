@@ -6,6 +6,7 @@ import {
   parseComxDetails,
   parseComxChapters,
   parseComxPages,
+  formatSlugTitle,
   comxSource,
 } from '../lib/sources/comx';
 
@@ -189,6 +190,12 @@ test('Com-X parser', async (t) => {
     assert.deepEqual(result.items[0].genres, ['Разные комиксы']);
     assert.ok(result.items[0].coverUrl.includes('rus.com-x.life%2Fuploads%2Fposts%2F2026-10%2F001_png_res.jpg'));
     assert.equal(result.hasNextPage, false);
+  });
+
+  await t.test('formats readable titles from raw slugs', () => {
+    assert.equal(formatSlugTitle('34079-unylye-budni-juuko'), 'Unylye budni juuko');
+    assert.equal(formatSlugTitle('solo-leveling'), 'Solo leveling');
+    assert.equal(formatSlugTitle('12345'), '12345');
   });
 
   await t.test('registers allowed image hosts for Com-X', () => {

@@ -165,10 +165,6 @@ class ComxClient {
       'User-Agent': BROWSER_UA,
       Accept: 'text/html,application/xhtml+xml',
       'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8',
-      'X-Forwarded-For': '92.119.164.4',
-      'X-Real-IP': '92.119.164.4',
-      'CF-Connecting-IP': '92.119.164.4',
-      'True-Client-IP': '92.119.164.4',
       Cookie: this.cookieString(),
       Referer: `${COMX_BASE}/`,
     };
@@ -213,6 +209,9 @@ class ComxClient {
         const formMatch = (text.match(/<form[\s\S]*?<\/form>/gi) || []).join('\n---\n');
         console.error(`[comx] Gate Scripts:`, scripts.slice(0, 2500));
         console.error(`[comx] Gate Forms:`, formMatch.slice(0, 1500));
+        if (res.status === 401 || title.toLowerCase().includes('вход') || text.includes('Com-X gate') || text.includes('«Реплика»')) {
+          throw new SourceError('Com-X.life: доступ ограничен для серверов за пределами РФ (требуется вход на com-x.life).', 401);
+        }
         throw new SourceError(`HTTP ${res.status} for ${new URL(url).host}: ${title}`, res.status);
       }
       return text;
@@ -222,11 +221,8 @@ class ComxClient {
       const title = text.match(/<title>([^<]+)<\/title>/i)?.[1] || 'no title';
       const bodySnippet = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300);
       console.error(`[comx] Request failed: HTTP ${res.status} | Title: "${title}" | Text: "${bodySnippet}"`);
-      if (res.status === 401 || text.includes('Com-X gate') || text.includes('«Реплика»')) {
-        throw new SourceError(
-          'Com-X.life: доступ ограничен для серверов за пределами РФ (гейт «Реплика»). Укажите COMX_COOKIES в переменных окружения.',
-          401
-        );
+      if (res.status === 401 || title.toLowerCase().includes('вход') || text.includes('Com-X gate') || text.includes('«Реплика»')) {
+        throw new SourceError('Com-X.life: доступ ограничен для серверов за пределами РФ (требуется вход на com-x.life).', 401);
       }
       throw new SourceError(`HTTP ${res.status} for ${new URL(url).host}: ${title}`, res.status);
     }
@@ -286,6 +282,37 @@ export function parseComxRss(xml: string, $in?: CheerioAPI): MangaListResult {
   });
 
   return { items, hasNextPage: false };
+}
+
+let rssCache: { items: SManga[]; expiresAt: number } | null = null;
+
+export async function fetchComxRssItems(): Promise<SManga[]> {
+  const now = Date.now();
+  if (rssCache && rssCache.expiresAt > now) {
+    return rssCache.items;
+  }
+  try {
+    const res = await fetch(`${COMX_BASE}/rss.xml`, {
+      headers: { 'User-Agent': BROWSER_UA },
+    });
+    if (res.ok) {
+      const xml = await res.text();
+      const result = parseComxRss(xml);
+      rssCache = { items: result.items, expiresAt: now + 5 * 60_000 };
+      return result.items;
+    }
+  } catch (err) {
+    console.error('[comx] Failed to fetch rss.xml:', err);
+  }
+  return rssCache ? rssCache.items : [];
+}
+
+export function formatSlugTitle(slug: string): string {
+  const withoutId = slug.replace(/^\d+-/, '');
+  const words = withoutId.split(/[-_]+/).filter(Boolean);
+  if (words.length === 0) return slug;
+  const sentence = words.join(' ');
+  return sentence.charAt(0).toUpperCase() + sentence.slice(1);
 }
 
 export function parseComxCatalog(html: string, $in?: CheerioAPI): MangaListResult {
@@ -613,6 +640,7 @@ export const comxSource: MangaSource = {
     baseUrl: COMX_BASE,
     isOnline: true,
     supportsSearch: true,
+    note: 'Сервер Com-X.life может требовать вход при доступе с зарубежного хостинга.',
   },
   imageReferer: `${COMX_BASE}/`,
   imageHosts: [/(^|\.)com-x\.life$/i],
@@ -630,16 +658,9 @@ export const comxSource: MangaSource = {
         const is401 = err?.status === 401 || err?.statusCode === 401 || String(err?.message || '').includes('401');
         if (is401 && page === 1) {
           console.warn('[comx] 401 gate on catalog, falling back to rss.xml...');
-          try {
-            const rssRes = await fetch(`${COMX_BASE}/rss.xml`, {
-              headers: { 'User-Agent': BROWSER_UA },
-            });
-            if (rssRes.ok) {
-              const xml = await rssRes.text();
-              return parseComxRss(xml);
-            }
-          } catch (rssErr) {
-            console.error('[comx] rss fallback failed:', rssErr);
+          const items = await fetchComxRssItems();
+          if (items.length > 0) {
+            return { items, hasNextPage: false };
           }
         }
         throw err;
@@ -649,26 +670,78 @@ export const comxSource: MangaSource = {
 
   search(query: string, page: number) {
     return cached(`comx:search:${query}:${page}`, 3 * 60_000, async () => {
-      const q = encodeURIComponent(query.trim());
-      const path = page === 1 ? `/search/${q}/` : `/search/${q}/page/${page}/`;
-      const html = await client.fetchHtml(`${COMX_BASE}${path}`);
-      return parseComxCatalog(html);
+      try {
+        const q = encodeURIComponent(query.trim());
+        const path = page === 1 ? `/search/${q}/` : `/search/${q}/page/${page}/`;
+        const html = await client.fetchHtml(`${COMX_BASE}${path}`);
+        return parseComxCatalog(html);
+      } catch (err: any) {
+        const is401 = err?.status === 401 || err?.statusCode === 401 || String(err?.message || '').includes('401');
+        if (is401) {
+          console.warn(`[comx] 401 gate on search "${query}", filtering RSS items...`);
+          const rssItems = await fetchComxRssItems();
+          const qLower = query.trim().toLowerCase();
+          const filtered = rssItems.filter(item =>
+            item.title.toLowerCase().includes(qLower) ||
+            item.altTitle?.toLowerCase().includes(qLower) ||
+            item.genres?.some(g => g.toLowerCase().includes(qLower))
+          );
+          return { items: filtered, hasNextPage: false };
+        }
+        throw err;
+      }
     });
   },
 
   details(slug: string) {
     return cached(`comx:details:${slug}`, 5 * 60_000, async () => {
       const cleanSlug = slug.replace(/\.html$/, '');
-      const html = await client.fetchHtml(`${COMX_BASE}/${encodeURIComponent(cleanSlug)}.html`);
-      return parseComxDetails(html, cleanSlug);
+      try {
+        const html = await client.fetchHtml(`${COMX_BASE}/${encodeURIComponent(cleanSlug)}.html`);
+        return parseComxDetails(html, cleanSlug);
+      } catch (err: any) {
+        const is401 = err?.status === 401 || err?.statusCode === 401 || String(err?.message || '').includes('401');
+        if (is401) {
+          console.warn(`[comx] 401 gate on details for ${cleanSlug}, searching RSS fallback...`);
+          const rssItems = await fetchComxRssItems();
+          const found = rssItems.find(
+            m => m.id === makeMangaId('comx', cleanSlug) || (m.sourceUrl && m.sourceUrl.includes(cleanSlug))
+          );
+          if (found) {
+            return found;
+          }
+          return {
+            id: makeMangaId('comx', cleanSlug),
+            sourceId: 'comx',
+            title: formatSlugTitle(cleanSlug),
+            description: 'Сервер Com-X.life временно ограничивает прямой доступ к странице тайтла для зарубежного хостинга. Читайте этот тайтл прямо на источнике com-x.life.',
+            coverUrl: '',
+            authors: [],
+            status: 'UNKNOWN',
+            rating: 0,
+            genres: [],
+            sourceUrl: `${COMX_BASE}/${cleanSlug}.html`,
+          };
+        }
+        throw err;
+      }
     });
   },
 
   chapters(slug: string) {
     return cached(`comx:chapters:${slug}`, 5 * 60_000, async () => {
       const cleanSlug = slug.replace(/\.html$/, '');
-      const html = await client.fetchHtml(`${COMX_BASE}/${encodeURIComponent(cleanSlug)}.html`);
-      return parseComxChapters(html, cleanSlug);
+      try {
+        const html = await client.fetchHtml(`${COMX_BASE}/${encodeURIComponent(cleanSlug)}.html`);
+        return parseComxChapters(html, cleanSlug);
+      } catch (err: any) {
+        const is401 = err?.status === 401 || err?.statusCode === 401 || String(err?.message || '').includes('401');
+        if (is401) {
+          console.warn(`[comx] 401 gate on chapters for ${cleanSlug}, returning empty array`);
+          return [];
+        }
+        throw err;
+      }
     });
   },
 

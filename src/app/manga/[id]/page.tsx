@@ -227,6 +227,24 @@ export default function MangaDetailsPage({ params }: { params: Promise<{ id: str
             {chapters.length === 0 && manga.sourceId === 'mangalib' && (
               <p>Возможно, тайтл лицензирован и закрыт на MangaLib без авторизации.</p>
             )}
+            {chapters.length === 0 && manga.sourceId === 'comx' && (
+              <div style={{ maxWidth: 480, margin: '0.75rem auto 0', textAlign: 'center' }}>
+                <p className="muted" style={{ marginBottom: '1rem' }}>
+                  Сервер Com-X.life временно ограничивает чтение глав для зарубежного хостинга. Вы можете открыть и читать этот тайтл прямо на источнике.
+                </p>
+                {manga.sourceUrl && (
+                  <a
+                    href={manga.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-primary"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+                  >
+                    <IconExternal size={16} /> Читать на Com-X.life ↗
+                  </a>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <div className="chapter-list">
