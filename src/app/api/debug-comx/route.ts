@@ -140,7 +140,8 @@ export async function GET() {
     let imagesMatch: RegExpMatchArray | null = null;
 
     if (realLink) {
-      const rDetails = await fetch(`https://com-x.life${realLink}`, {
+      const detailsUrl = realLink.startsWith('http') ? realLink : `https://com-x.life${realLink}`;
+      const rDetails = await fetch(detailsUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)',
           Cookie: cookieStr(),
@@ -148,13 +149,14 @@ export async function GET() {
       });
       tDetails = await rDetails.text();
       hasData = tDetails.includes('window.__DATA__');
-      logs.push(`5d. GET details ${realLink} -> status: ${rDetails.status}, len: ${tDetails.length}, has__DATA__: ${hasData}`);
+      logs.push(`5d. GET details ${detailsUrl} -> status: ${rDetails.status}, len: ${tDetails.length}, has__DATA__: ${hasData}`);
 
-      const readerMatch = tDetails.match(/href=["'](\/reader\/[^"']+)["']/);
+      const readerMatch = tDetails.match(/href=["'](\/reader\/[^"']+|https:\/\/com-x\.life\/reader\/[^"']+)["']/);
       readerUrl = readerMatch?.[1] || '';
 
       if (readerUrl) {
-        const rReader = await fetch(`https://com-x.life${readerUrl}`, {
+        const fullReaderUrl = readerUrl.startsWith('http') ? readerUrl : `https://com-x.life${readerUrl}`;
+        const rReader = await fetch(fullReaderUrl, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)',
             Cookie: cookieStr(),
@@ -162,7 +164,7 @@ export async function GET() {
         });
         tReader = await rReader.text();
         imagesMatch = tReader.match(/"images":\s*(\[[^\]]+\])/);
-        logs.push(`6. GET reader ${readerUrl} -> status: ${rReader.status}, len: ${tReader.length}, hasImages: ${Boolean(imagesMatch)}`);
+        logs.push(`6. GET reader ${fullReaderUrl} -> status: ${rReader.status}, len: ${tReader.length}, hasImages: ${Boolean(imagesMatch)}`);
       }
     }
 
