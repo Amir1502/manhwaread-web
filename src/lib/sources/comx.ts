@@ -196,8 +196,10 @@ class ComxClient {
 
       if (!res.ok) {
         const title = text.match(/<title>([^<]+)<\/title>/i)?.[1] || 'no title';
-        const bodySnippet = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300);
-        console.error(`[comx] Retry failed: HTTP ${res.status} | Title: "${title}" | Text: "${bodySnippet}"`);
+        const scripts = (text.match(/<script[\s\S]*?<\/script>/gi) || []).join('\n---\n');
+        const formMatch = (text.match(/<form[\s\S]*?<\/form>/gi) || []).join('\n---\n');
+        console.error(`[comx] Gate Scripts:`, scripts.slice(0, 2500));
+        console.error(`[comx] Gate Forms:`, formMatch.slice(0, 1500));
         throw new SourceError(`HTTP ${res.status} for ${new URL(url).host}: ${title}`, res.status);
       }
       return text;
