@@ -123,16 +123,16 @@ export async function GET() {
     const titleYandex = tYandex.match(/<title>([^<]+)<\/title>/i)?.[1] || '';
     logs.push(`4b. GET /comix-read/ (YandexBot UA) -> status: ${rYandex.status}, title: "${titleYandex}", len: ${tYandex.length}`);
 
-    // Find real comic cards
-    const readedMatches = Array.from(tYandex.matchAll(/class=["'][^"']*readed[^"']*["'][\s\S]*?href=["'](\/[^"']+\.html)["']/gi)).map(m => m[1]);
-    const posterMatches = Array.from(tYandex.matchAll(/class=["'][^"']*poster[^"']*["'][\s\S]*?href=["'](\/[^"']+\.html)["']/gi)).map(m => m[1]);
-    const allHtmlLinks = Array.from(tYandex.matchAll(/href=["'](\/[^"']+\.html)["']/gi)).map(m => m[1]);
+    // Find all links in tYandex
+    const allHrefs = Array.from(tYandex.matchAll(/href=["']([^"']+)["']/gi)).map(m => m[1]);
+    const comicHrefs = allHrefs.filter(h => /\/[0-9]+-[^"']+\.html/i.test(h));
+    const dleContentSnippet = tYandex.match(/id=["']dle-content["'][\s\S]*?<\/div>/i)?.[0] || '';
 
-    logs.push(`5a. readed cards (${readedMatches.length}): ${readedMatches.slice(0, 3).join(', ')}`);
-    logs.push(`5b. poster cards (${posterMatches.length}): ${posterMatches.slice(0, 3).join(', ')}`);
-    logs.push(`5c. total .html links: ${allHtmlLinks.length}`);
+    logs.push(`5a. total hrefs: ${allHrefs.length}`);
+    logs.push(`5b. sample hrefs: ${allHrefs.slice(0, 15).join(', ')}`);
+    logs.push(`5c. comic-like hrefs (${comicHrefs.length}): ${comicHrefs.slice(0, 5).join(', ')}`);
 
-    const realLink = readedMatches[0] || posterMatches[0] || allHtmlLinks.find(l => !l.includes('rising-quiver') && !l.includes('relic') && !l.includes('honeypot'));
+    const realLink = comicHrefs.find(h => !h.includes('rising-quiver') && !h.includes('relic') && !h.includes('honeypot') && !h.includes('flint') && !h.includes('river')) || comicHrefs[0];
     let tDetails = '';
     let hasData = false;
     let readerUrl = '';
@@ -170,6 +170,7 @@ export async function GET() {
       logs,
       realLink,
       readerUrl,
+      dleContentSnippet: dleContentSnippet.slice(0, 500),
       detailsSnippet: tDetails.slice(0, 500),
       imagesSnippet: imagesMatch?.[1]?.slice(0, 300),
     });
