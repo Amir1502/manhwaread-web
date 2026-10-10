@@ -176,8 +176,6 @@ export async function GET() {
       realLink,
       readerUrl,
       dleContentSnippet: dleContentSnippet.slice(0, 500),
-      detailsSnippet: tDetails.slice(0, 500),
-      imagesSnippet: imagesMatch?.[1]?.slice(0, 300),
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message, stack: err.stack, logs }, { status: 500 });
