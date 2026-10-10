@@ -11,14 +11,14 @@ export default function Footer() {
         <div>
           <div style={{ fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>Tsundoku Web</div>
           <div>
-            Веб-версия Android-проекта{' '}
-            <a href="https://github.com/Amir1502/manhwaread" target="_blank" rel="noopener noreferrer">
-              Amir1502/manhwaread
+            Репозиторий проекта на GitHub:{' '}
+            <a href="https://github.com/Amir1502/Tsundoku" target="_blank" rel="noopener noreferrer">
+              Amir1502/Tsundoku
             </a>
             . Контент принадлежит правообладателям и сайтам-источникам.
           </div>
         </div>
-        <div>Источники: MangaLib · ReManga · MangaMir · MangaDex · Manga18fx (18+)</div>
+        <div>Источники: MangaLib · ReManga · Com-X · MangaMir · MangaDex · Книги 11 класс · Manga18fx (18+)</div>
       </div>
     </footer>
   );

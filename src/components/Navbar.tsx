@@ -36,7 +36,7 @@ export default function Navbar() {
 
         <div className="navbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <a
-            href="https://github.com/Amir1502/manhwaread-web"
+            href="https://github.com/Amir1502/Tsundoku"
             target="_blank"
             rel="noopener noreferrer"
             className="btn btn-secondary btn-sm nav-github"

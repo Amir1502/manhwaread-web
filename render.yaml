@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: manhwaread-web
+    name: tsundoku-web
     runtime: node
     plan: free
     region: frankfurt
