@@ -3547,17 +3547,31 @@ button.chip:hover {
 }
 
 /* Reader Header */
+/* Reader Header */
 .reader-header {
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 100;
   backdrop-filter: blur(12px);
-  background: rgba(16, 17, 24, 0.85);
+  -webkit-backdrop-filter: blur(12px);
+  background: rgba(16, 17, 24, 0.9);
   border-bottom: 1px solid var(--border-subtle);
   padding: 0.75rem 1.25rem;
+  padding-top: calc(0.75rem + env(safe-area-inset-top));
   display: flex;
   align-items: center;
   justify-content: space-between;
+  transition:
+    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.25s ease;
+}
+
+.reader-header.hidden {
+  transform: translateY(-115%);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .reader-header-left,
@@ -3610,9 +3624,10 @@ button.chip:hover {
 /* Reader Body */
 .reader-body {
   flex: 1;
-  padding: 3rem 1.5rem 5rem;
+  padding: calc(4.75rem + env(safe-area-inset-top)) 1.5rem calc(5.5rem + env(safe-area-inset-bottom));
   margin: 0 auto;
   width: 100%;
+  cursor: default;
 }
 
 .reader-chapter-title {
@@ -3630,6 +3645,49 @@ button.chip:hover {
   text-indent: 1.75em;
   hyphens: auto;
   word-break: break-word;
+}
+
+/* Zen mode floating trigger */
+.reader-zen-hint {
+  position: fixed;
+  top: calc(0.85rem + env(safe-area-inset-top));
+  right: 1.25rem;
+  z-index: 80;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.42rem 0.85rem;
+  border-radius: 9999px;
+  background: rgba(16, 17, 24, 0.8);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  opacity: 0.4;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  transition:
+    opacity 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.reader-zen-hint:hover {
+  opacity: 1;
+  background: rgba(16, 17, 24, 0.95);
+  color: var(--text-primary);
+  transform: scale(1.03);
+}
+
+.reader-theme-light .reader-zen-hint {
+  background: rgba(255, 255, 255, 0.88);
+  color: #333;
+}
+.reader-theme-sepia .reader-zen-hint {
+  background: rgba(247, 239, 226, 0.88);
+  color: #3b2e2a;
 }
 
 /* Settings Popover */
@@ -3706,16 +3764,29 @@ button.chip:hover {
 
 /* Reader Footer Nav */
 .reader-footer {
-  position: sticky;
+  position: fixed;
   bottom: 0;
+  left: 0;
+  right: 0;
   z-index: 90;
   backdrop-filter: blur(12px);
-  background: rgba(16, 17, 24, 0.85);
+  -webkit-backdrop-filter: blur(12px);
+  background: rgba(16, 17, 24, 0.9);
   border-top: 1px solid var(--border-subtle);
   padding: 0.85rem 1.5rem;
+  padding-bottom: calc(0.85rem + env(safe-area-inset-bottom));
   display: flex;
   align-items: center;
   justify-content: space-between;
+  transition:
+    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.25s ease;
+}
+
+.reader-footer.hidden {
+  transform: translateY(115%);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .reader-progress-info {

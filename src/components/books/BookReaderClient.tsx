@@ -12,6 +12,9 @@ import {
   IconClose,
   IconBook,
   IconSparkle,
+  IconEye,
+  IconEyeOff,
+  IconMaximize,
 } from '@/components/Icons';
 
 type ReaderTheme = 'dark' | 'oled' | 'sepia' | 'light';
@@ -57,6 +60,8 @@ export default function BookReaderClient({
   const [settings, setSettings] = useState<ReaderSettings>(DEFAULT_SETTINGS);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isTocOpen, setIsTocOpen] = useState(false);
+  const [hud, setHud] = useState(true);
+  const lastScrollY = useRef(0);
 
   // Sync state if URL query param changes
   useEffect(() => {
@@ -120,7 +125,40 @@ export default function BookReaderClient({
     }
   };
 
-  // Keyboard navigation: Left/Right arrows
+  // Auto-hide HUD on scroll down, reveal on scroll up
+  useEffect(() => {
+    const onScroll = () => {
+      const y = window.scrollY;
+      const diff = y - lastScrollY.current;
+      if (Math.abs(diff) > 50) {
+        if (diff > 0 && y > 80) {
+          // Scrolling down - hide HUD
+          setHud(false);
+          setIsSettingsOpen(false);
+          setIsTocOpen(false);
+        } else if (diff < 0) {
+          // Scrolling up - show HUD
+          setHud(true);
+        }
+        lastScrollY.current = y;
+      }
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Toggle fullscreen mode
+  const toggleFullscreen = () => {
+    try {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    } catch {}
+  };
+
+  // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't trigger if user is typing in an input
@@ -131,14 +169,42 @@ export default function BookReaderClient({
       } else if (e.key === 'ArrowRight') {
         if (currentChapterIdx < book.chapters.length - 1) goToChapter(currentChapterIdx + 1);
       } else if (e.key === 'Escape') {
-        setIsSettingsOpen(false);
-        setIsTocOpen(false);
+        if (isSettingsOpen || isTocOpen) {
+          setIsSettingsOpen(false);
+          setIsTocOpen(false);
+        } else {
+          setHud(prev => !prev);
+        }
+      } else if (e.key === 'h' || e.key === 'H' || e.key === 'р' || e.key === 'Р') {
+        setHud(prev => !prev);
+      } else if (e.key === 'f' || e.key === 'F' || e.key === 'а' || e.key === 'А') {
+        toggleFullscreen();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentChapterIdx, book.chapters.length]);
+  }, [currentChapterIdx, book.chapters.length, isSettingsOpen, isTocOpen]);
+
+  // Click on background or reading area toggles HUD
+  const handleContentClick = (e: React.MouseEvent) => {
+    // If text was selected (e.g. for copying quotes), don't toggle
+    const selection = window.getSelection();
+    if (selection && selection.toString().trim().length > 0) return;
+
+    // If clicking an interactive button or panel, don't toggle
+    const target = e.target as HTMLElement | null;
+    if (
+      target?.closest(
+        'button, a, input, select, .reader-settings-panel, .reader-drawer, .reader-header, .reader-footer'
+      )
+    ) {
+      return;
+    }
+
+    setHud(prev => !prev);
+    setIsSettingsOpen(false);
+  };
 
   const currentChapter: BookChapter =
     book.chapters[currentChapterIdx] ||
@@ -172,9 +238,28 @@ export default function BookReaderClient({
   };
 
   return (
-    <div className={`book-reader-root ${getThemeClass(settings.theme)}`}>
+    <div
+      className={`book-reader-root ${getThemeClass(settings.theme)}`}
+      onClick={handleContentClick}
+    >
+      {/* Floating Zen Mode Restore Button */}
+      {!hud && (
+        <button
+          type="button"
+          className="reader-zen-hint"
+          onClick={e => {
+            e.stopPropagation();
+            setHud(true);
+          }}
+          title="Показать меню (нажмите в любом месте или H)"
+        >
+          <IconEye size={14} />
+          <span>Меню</span>
+        </button>
+      )}
+
       {/* Sticky Reader Navigation Bar */}
-      <header className="reader-header">
+      <header className={`reader-header ${hud ? '' : 'hidden'}`}>
         <div className="reader-header-left">
           <Link
             href={`/books/${book.id}`}
@@ -193,12 +278,29 @@ export default function BookReaderClient({
         </div>
 
         <div className="reader-header-right">
+          {/* Zen Mode Button */}
+          <button
+            type="button"
+            className="reader-btn"
+            onClick={e => {
+              e.stopPropagation();
+              setHud(false);
+              setIsSettingsOpen(false);
+              setIsTocOpen(false);
+            }}
+            title="Скрыть панели (только текст)"
+          >
+            <IconEyeOff size={16} />
+            <span>Только текст</span>
+          </button>
+
           {/* TOC Drawer Toggle Button */}
           {totalChapters > 1 && (
             <button
               type="button"
               className={`reader-btn ${isTocOpen ? 'active' : ''}`}
-              onClick={() => {
+              onClick={e => {
+                e.stopPropagation();
                 setIsTocOpen(prev => !prev);
                 setIsSettingsOpen(false);
               }}
@@ -344,6 +446,34 @@ export default function BookReaderClient({
                     </button>
                   </div>
                 </div>
+
+                {/* Reading Mode */}
+                <div className="settings-group">
+                  <span className="settings-label">Режим чтения</span>
+                  <div className="settings-font-options">
+                    <button
+                      type="button"
+                      className="settings-font-btn"
+                      onClick={() => {
+                        setHud(false);
+                        setIsSettingsOpen(false);
+                      }}
+                      title="Скрыть верхнюю и нижнюю панели"
+                    >
+                      <IconEyeOff size={14} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '4px' }} />
+                      Только текст
+                    </button>
+                    <button
+                      type="button"
+                      className="settings-font-btn"
+                      onClick={toggleFullscreen}
+                      title="Полноэкранный режим (F)"
+                    >
+                      <IconMaximize size={14} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '4px' }} />
+                      На весь экран
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -372,7 +502,7 @@ export default function BookReaderClient({
       </main>
 
       {/* Sticky Reader Footer Bar */}
-      <footer className="reader-footer">
+      <footer className={`reader-footer ${hud ? '' : 'hidden'}`}>
         <button
           type="button"
           className="reader-btn"

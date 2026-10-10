@@ -123,3 +123,22 @@ export const IconBookOpen = ({ size, ...p }: P) => (
     <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
   </svg>
 );
+export const IconEye = ({ size, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+export const IconEyeOff = ({ size, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <path d="m9.88 9.88a3 3 0 1 0 4.24 4.24" />
+    <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+    <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+    <line x1="2" x2="22" y1="2" y2="22" />
+  </svg>
+);
+export const IconMaximize = ({ size, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+  </svg>
+);
