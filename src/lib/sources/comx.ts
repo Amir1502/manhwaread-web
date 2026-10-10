@@ -627,7 +627,8 @@ export const comxSource: MangaSource = {
         const html = await client.fetchHtml(`${COMX_BASE}${path}`);
         return parseComxCatalog(html);
       } catch (err: any) {
-        if (err?.statusCode === 401 && page === 1) {
+        const is401 = err?.status === 401 || err?.statusCode === 401 || String(err?.message || '').includes('401');
+        if (is401 && page === 1) {
           console.warn('[comx] 401 gate on catalog, falling back to rss.xml...');
           try {
             const rssRes = await fetch(`${COMX_BASE}/rss.xml`, {
